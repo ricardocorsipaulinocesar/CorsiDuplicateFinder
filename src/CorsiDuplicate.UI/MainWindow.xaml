@@ -353,6 +353,21 @@
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
+
+                                        <!-- Footer close bar: same collapse action as the header, so a long
+                                             folder's duplicate sets can be closed without scrolling back up. -->
+                                        <Border Background="{StaticResource SurfaceAlt}" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0"
+                                                Padding="12,8" Cursor="Hand" CornerRadius="0,0,8,8" Margin="-10,10,-10,-10"
+                                                MouseLeftButtonUp="FolderHeader_MouseLeftButtonUp">
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                <TextBlock Text="&#9652;" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                                                <TextBlock Foreground="{StaticResource TextMuted}" FontSize="11.5" VerticalAlignment="Center">
+                                                    <Run Text="Close &quot;"/>
+                                                    <Run Text="{Binding Path, Mode=OneWay}"/>
+                                                    <Run Text="&quot;"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
