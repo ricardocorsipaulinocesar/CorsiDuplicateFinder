@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Globalization;
 using CorsiDuplicate.Core.Hashing;
 using CorsiDuplicate.Infrastructure.Logging;
 using CorsiDuplicate.Infrastructure.Matching;
@@ -45,18 +47,32 @@ public sealed class FfmpegFrameExtractor
 
         try
         {
-            var frameHashes = new List<ulong[]>();
-            float[]? representativeHistogram = null;
-
+            var timestamps = new TimeSpan[SampleCount];
+            var framePaths = new string[SampleCount];
             for (var i = 0; i < SampleCount; i++)
             {
                 // Evenly spaced samples, inset from the very start/end where title
                 // cards or fades often make the frame unrepresentative.
                 var fraction = (i + 1) / (double)(SampleCount + 1);
-                var timestamp = TimeSpan.FromSeconds(duration.TotalSeconds * fraction);
-                var framePath = Path.Combine(tempDir, $"frame_{i}.jpg");
+                timestamps[i] = TimeSpan.FromSeconds(duration.TotalSeconds * fraction);
+                framePaths[i] = Path.Combine(tempDir, $"frame_{i}.jpg");
+            }
 
-                var ok = await TryExtractUsableFrameAsync(path, timestamp, framePath, duration, ct);
+            // One ffmpeg process extracts every sampled frame at once, instead of one
+            // process per frame. Spawning a process has a real fixed cost on Windows
+            // (tens of milliseconds), which used to multiply across every sampled
+            // frame of every video in a large library; this is the common-case path,
+            // and it doesn't change which frames end up selected or how they're
+            // scored — only how they're fetched.
+            await ExtractFramesBatchAsync(path, timestamps, framePaths, ct);
+
+            var frameHashes = new List<ulong[]>();
+            float[]? representativeHistogram = null;
+
+            for (var i = 0; i < SampleCount; i++)
+            {
+                var framePath = framePaths[i];
+                var ok = await EnsureUsableFrameAsync(path, timestamps[i], framePath, duration, ct);
                 if (!ok || !File.Exists(framePath))
                 {
                     continue;
@@ -87,21 +103,85 @@ public sealed class FfmpegFrameExtractor
     }
 
     /// <summary>
-    /// Extracts a frame at <paramref name="baseTimestamp"/>, and if it turns out to be
-    /// near-solid-color (a fade, a blank card, an off-target seek), retries at a few
-    /// small offsets around it looking for one with real content. If every attempt is
-    /// low-variance (a genuinely flat/solid-color video isn't a hypothetical — those
-    /// exist too), the least-flat one found is used rather than giving up on this
-    /// sample slot entirely: preferring a textured frame fixes the false-positive case
-    /// without ever leaving a video with zero usable signal.
+    /// Extracts every sampled frame of one video in a single ffmpeg invocation (multiple
+    /// "-ss ... -frames:v 1 ... output" groups after one shared "-i"). Best-effort: if the
+    /// whole batch fails, <see cref="EnsureUsableFrameAsync"/>'s per-slot fallback below
+    /// still produces each frame individually, just at the old, slower cost.
     /// </summary>
-    private static async Task<bool> TryExtractUsableFrameAsync(
+    private static async Task ExtractFramesBatchAsync(
+        string inputPath, IReadOnlyList<TimeSpan> timestamps, IReadOnlyList<string> outputPaths, CancellationToken ct)
+    {
+        try
+        {
+            var ffmpegPath = Path.Combine(GlobalFFOptions.Current.BinaryFolder, "ffmpeg.exe");
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = ffmpegPath,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            startInfo.ArgumentList.Add("-y");
+            startInfo.ArgumentList.Add("-i");
+            startInfo.ArgumentList.Add(inputPath);
+            for (var i = 0; i < timestamps.Count; i++)
+            {
+                startInfo.ArgumentList.Add("-ss");
+                startInfo.ArgumentList.Add(timestamps[i].TotalSeconds.ToString("0.###", CultureInfo.InvariantCulture));
+                startInfo.ArgumentList.Add("-frames:v");
+                startInfo.ArgumentList.Add("1");
+                startInfo.ArgumentList.Add("-q:v");
+                startInfo.ArgumentList.Add("3");
+                startInfo.ArgumentList.Add(outputPaths[i]);
+            }
+
+            using var process = new Process { StartInfo = startInfo };
+            process.Start();
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
+            var stderrTask = process.StandardError.ReadToEndAsync(ct);
+            await process.WaitForExitAsync(ct);
+            await Task.WhenAll(stdoutTask, stderrTask);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warning(nameof(FfmpegFrameExtractor), nameof(ExtractFramesBatchAsync),
+                $"Batched frame extraction failed for '{inputPath}': {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Confirms the frame already produced by <see cref="ExtractFramesBatchAsync"/> at
+    /// <paramref name="outputPath"/> (offset 0) is usable, and if it's missing or
+    /// near-solid-color, retries at a few small offsets around it looking for one with
+    /// real content — the exact same candidate set and selection rule as before this
+    /// batching change, so which frame ends up chosen (and therefore every hash/score
+    /// downstream) is unaffected. If every attempt is low-variance (a genuinely
+    /// flat/solid-color video isn't a hypothetical — those exist too), the least-flat
+    /// one found is used rather than giving up on this sample slot entirely.
+    /// </summary>
+    private static async Task<bool> EnsureUsableFrameAsync(
         string inputPath, TimeSpan baseTimestamp, string outputPath, TimeSpan duration, CancellationToken ct)
     {
         string? bestPath = null;
         var bestStdDev = -1.0;
 
-        foreach (var offsetSeconds in new[] { 0.0, 0.5, 1.0, -0.5, -1.0 })
+        if (File.Exists(outputPath))
+        {
+            var batchStdDev = FrameStdDev(outputPath);
+            if (batchStdDev >= MinFrameStdDev)
+            {
+                return true;
+            }
+
+            var movedAside = outputPath + ".0.candidate.jpg";
+            File.Move(outputPath, movedAside, overwrite: true);
+            bestPath = movedAside;
+            bestStdDev = batchStdDev;
+        }
+
+        foreach (var offsetSeconds in new[] { 0.5, 1.0, -0.5, -1.0 })
         {
             var timestamp = baseTimestamp + TimeSpan.FromSeconds(offsetSeconds);
             if (timestamp < TimeSpan.Zero || timestamp > duration)
