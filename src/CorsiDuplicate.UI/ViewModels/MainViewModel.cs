@@ -80,6 +80,29 @@ public partial class MainViewModel : ObservableObject
             _regroupDebounceTimer.Stop();
             await RebuildResultsFromMemoryAsync();
         };
+
+        FolderManager.FolderRemoved += OnFolderRemoved;
+    }
+
+    /// <summary>
+    /// A folder removed from the managed list must also drop whatever results/in-memory
+    /// scan data it still has showing — otherwise a stale duplicate-set for a folder the
+    /// user just removed keeps sitting in the results grid until the next full re-scan.
+    /// </summary>
+    private void OnFolderRemoved(string folderPath)
+    {
+        _scannedItemsByFolder.Remove(folderPath);
+        _folderExpandState.Remove(folderPath);
+
+        var folderVm = FolderResults.FirstOrDefault(f => string.Equals(f.Path, folderPath, StringComparison.OrdinalIgnoreCase));
+        if (folderVm is not null)
+        {
+            FolderResults.Remove(folderVm);
+            Selection.Recompute(FolderResults.SelectMany(f => f.Groups).SelectMany(g => g.Items));
+            OnPropertyChanged(nameof(HasAnyResults));
+        }
+
+        AppLogger.Info(nameof(MainViewModel), nameof(OnFolderRemoved), $"Cleared results and cached scan data for removed folder '{folderPath}'.");
     }
 
     partial void OnSimilarityThresholdChanged(double value)

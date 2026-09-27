@@ -40,6 +40,9 @@ public partial class FolderManagerViewModel : ObservableObject
 
     public IEnumerable<ManagedFolderViewModel> EnabledFolders => Folders.Where(f => f.IsEnabled);
 
+    /// <summary>Raised after a folder is removed from the managed list, so anything holding results/cache for that path can drop them too.</summary>
+    public event Action<string>? FolderRemoved;
+
     [RelayCommand]
     private void ToggleExpanded() => IsExpanded = !IsExpanded;
 
@@ -76,6 +79,7 @@ public partial class FolderManagerViewModel : ObservableObject
 
         Folders.Remove(folder);
         Persist();
+        FolderRemoved?.Invoke(folder.Path);
     }
 
     public void RecordScanResult(string path, int itemCount)
