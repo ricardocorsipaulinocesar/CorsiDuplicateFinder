@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
@@ -215,7 +216,8 @@ public partial class MainViewModel : ObservableObject
                     break;
                 }
 
-                StatusMessage = $"Enumerating files in {folder.Path}...";
+                var folderDisplayName = FolderDisplayName(folder.Path);
+                StatusMessage = $"Enumerating files... - {folderDisplayName}";
                 IsProgressIndeterminate = true;
                 _currentFolderStartUtc = DateTime.UtcNow;
                 folder.IsScanning = true;
@@ -227,7 +229,7 @@ public partial class MainViewModel : ObservableObject
                         IsProgressIndeterminate = false;
                         ScanProgressCurrent = p.FilesDone;
                         ScanProgressTotal = p.FilesTotal;
-                        StatusMessage = $"Scanning {folder.Path}... {p.FilesDone}/{p.FilesTotal}{FormatEta(p)}";
+                        StatusMessage = $"Scanning... {p.FilesDone}/{p.FilesTotal} - {folderDisplayName}{FormatEta(p)}";
                     });
 
                     var items = await _scanPipeline.ScanFolderAsync(folder.Path, progress, _scanCts.Token);
@@ -251,7 +253,7 @@ public partial class MainViewModel : ObservableObject
                     // tell the user, and move on to the next folder instead.
                     AppLogger.Error(nameof(MainViewModel), nameof(ScanAsync),
                         $"Scanning folder '{folder.Path}' failed unexpectedly.", ex);
-                    StatusMessage = $"Error scanning {folder.Path}: {ex.Message}";
+                    StatusMessage = $"Error - {folderDisplayName} - {ex.Message}";
                 }
                 finally
                 {
@@ -289,6 +291,19 @@ public partial class MainViewModel : ObservableObject
             _scanCts?.Dispose();
             _scanCts = null;
         }
+    }
+
+    /// <summary>
+    /// The status bar shows only the folder's final path segment, not the full path —
+    /// the user already knows which drive/parent folders they added, and the full path
+    /// just crowds out the actual progress. Falls back to the full path for a bare
+    /// drive root (e.g. "D:\"), which has no final segment of its own.
+    /// </summary>
+    private static string FolderDisplayName(string path)
+    {
+        var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var name = Path.GetFileName(trimmed);
+        return string.IsNullOrEmpty(name) ? path : name;
     }
 
     [RelayCommand(CanExecute = nameof(IsScanning))]
@@ -334,7 +349,7 @@ public partial class MainViewModel : ObservableObject
                 ? $"{(int)remaining.TotalMinutes}m {remaining.Seconds}s"
                 : $"{Math.Max(1, remaining.Seconds)}s";
 
-        return $" — about {display} remaining";
+        return $" - about {display} remaining";
     }
 
     /// <summary>

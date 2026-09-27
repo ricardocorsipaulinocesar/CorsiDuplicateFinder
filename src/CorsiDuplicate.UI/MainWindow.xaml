@@ -118,7 +118,48 @@
                 </Border>
 
                 <Border Width="1" Background="{StaticResource Border}" Margin="10,2"/>
-                <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" Margin="4,0"/>
+
+                <!-- Status: pulses bold/green while a scan is actively running, so the
+                     app visibly reads as "working" instead of looking identical to any
+                     other status message; reverts to the normal muted style once
+                     finished/stopped. -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsScanning}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="StatusPulseStoryboard">
+                                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1.0" To="0.55" Duration="0:0:0.7"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <StopStoryboard BeginStoryboardName="StatusPulseStoryboard"/>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <Ellipse Width="7" Height="7" Fill="{StaticResource Success}" VerticalAlignment="Center" Margin="0,0,7,0"
+                             Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"/>
+
+                    <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsScanning}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource Success}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
 
                 <Button Content="Delete selected" Style="{StaticResource DangerButton}" HorizontalAlignment="Right"
                         Command="{Binding DeleteSelectedCommand}" Margin="16,0,0,0"/>
