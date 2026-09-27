@@ -1,0 +1,14 @@
+bin/
+obj/
+.vs/
+*.user
+
+# Published self-contained build output — large, regenerated via dotnet publish
+publish/
+
+# Runtime logs (AppLogger writes here next to the built exe)
+log/
+**/log/*.json
+
+# Working scratch files used for one-off mockup review, not part of the app
+mockup/
