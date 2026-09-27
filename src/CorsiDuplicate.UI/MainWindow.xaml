@@ -29,7 +29,6 @@
 
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisInverted" Invert="True"/>
-        <conv:BoolToDoubleConverter x:Key="ExpandedHeight" TrueValue="480" FalseValue="172"/>
         <conv:BoolToDoubleConverter x:Key="ChevronAngle" TrueValue="90" FalseValue="0"/>
         <conv:InverseBooleanConverter x:Key="InverseBool"/>
         <conv:StringToBrushConverter x:Key="StringToBrush"/>
@@ -142,11 +141,11 @@
                             <TextBlock Text="{Binding FolderManager.Folders.Count}" FontSize="10" FontWeight="Bold" Foreground="{StaticResource AccentStrong}"/>
                         </Border>
                         <Button Content="+ Add folder" Style="{StaticResource ToolButton}" Padding="8,3"
-                                Command="{Binding AddFolderCommand}" Margin="8,0,0,0"/>
+                                Command="{Binding AddFolderCommand}" Margin="8,0,0,0"
+                                ToolTip="Select one or more folders to add at once"/>
                         <Button Content="Hide/Show" Style="{StaticResource ToolButton}" Padding="8,3"
-                                Command="{Binding FolderManager.ToggleHiddenCommand}" Margin="6,0,0,0"/>
-                        <Button Content="Expand" Style="{StaticResource ToolButton}" Padding="8,3"
-                                Command="{Binding FolderManager.ToggleExpandedCommand}" Margin="6,0,0,0"/>
+                                Command="{Binding FolderManager.ToggleManageFoldersCommand}" Margin="6,0,0,0"
+                                ToolTip="Open the full-screen managed-folders list"/>
 
                         <Border Width="1" Background="{StaticResource Border}" Margin="10,2" Height="20"/>
                         <Button Content="High quality (all)" Style="{StaticResource HqButton}" Padding="8,3"
@@ -155,45 +154,11 @@
                         <Button Content="Low quality (all)" Style="{StaticResource LqButton}" Padding="8,3" Margin="6,0,0,0"
                                 Command="{Binding ApplyLowQualityToAllCommand}"
                                 ToolTip="In every duplicate set across every folder, keep only the worst copy unchecked"/>
+                        <Button Content="Clean results" Style="{StaticResource ToolButton}" Padding="8,3" Margin="6,0,0,0"
+                                Command="{Binding ClearResultsCommand}"
+                                ToolTip="Clear every duplicate set currently shown, without re-scanning"/>
                     </StackPanel>
                 </Border>
-                <ListView ItemsSource="{Binding FolderManager.Folders}" BorderThickness="0" Background="{StaticResource Surface}"
-                          Visibility="{Binding FolderManager.IsHidden, Converter={StaticResource BoolToVisInverted}}"
-                          MaxHeight="{Binding FolderManager.IsExpanded, Converter={StaticResource ExpandedHeight}}">
-                    <ListView.Resources>
-                        <Style TargetType="{x:Type ListViewItem}">
-                            <Setter Property="Foreground" Value="{StaticResource Text}"/>
-                            <Setter Property="Background" Value="Transparent"/>
-                        </Style>
-                        <Style TargetType="{x:Type GridViewColumnHeader}">
-                            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
-                            <Setter Property="Background" Value="{StaticResource SurfaceAlt}"/>
-                        </Style>
-                    </ListView.Resources>
-                    <ListView.View>
-                        <GridView>
-                            <GridViewColumn Header="On" Width="40">
-                                <GridViewColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <CheckBox IsChecked="{Binding IsEnabled, Mode=TwoWay}"/>
-                                    </DataTemplate>
-                                </GridViewColumn.CellTemplate>
-                            </GridViewColumn>
-                            <GridViewColumn Header="Folder path" Width="480" DisplayMemberBinding="{Binding Path}"/>
-                            <GridViewColumn Header="Last scanned" Width="140" DisplayMemberBinding="{Binding LastScannedDisplay}"/>
-                            <GridViewColumn Header="Items" Width="90" DisplayMemberBinding="{Binding ItemCountDisplay}"/>
-                            <GridViewColumn Header="" Width="70">
-                                <GridViewColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Button Content="Remove" Style="{StaticResource MiniButton}"
-                                                Command="{Binding DataContext.FolderManager.RemoveFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                CommandParameter="{Binding}"/>
-                                    </DataTemplate>
-                                </GridViewColumn.CellTemplate>
-                            </GridViewColumn>
-                        </GridView>
-                    </ListView.View>
-                </ListView>
             </StackPanel>
         </Border>
 
@@ -364,6 +329,83 @@
                 <TextBlock FontWeight="Black" FontSize="15" Foreground="{StaticResource AccentStrong}" Text="{Binding Selection.TotalSelectedDisplay}"/>
                 <TextBlock Text=" total size" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Bottom" Margin="4,0,0,1"/>
             </StackPanel>
+        </Border>
+
+        <!-- Managed folders: full-screen overlay. Covers every row so it sits above the
+             whole window; clicking the dark backdrop closes it, clicking the sheet itself
+             does not (the sheet's own MouseLeftButtonDown is marked handled below). -->
+        <Border Grid.Row="0" Grid.RowSpan="5" Background="#B3000000"
+                Visibility="{Binding FolderManager.IsManageFoldersOpen, Converter={StaticResource BoolToVis}}"
+                MouseLeftButtonDown="ManageFoldersBackdrop_MouseLeftButtonDown">
+            <Border Background="{StaticResource BgApp}" BorderBrush="{StaticResource Border}" BorderThickness="1"
+                    CornerRadius="10" Margin="28" MouseLeftButtonDown="ManageFoldersSheet_MouseLeftButtonDown">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}"
+                            BorderThickness="0,0,0,1" CornerRadius="10,10,0,0" Padding="20,14">
+                        <Grid>
+                            <StackPanel>
+                                <TextBlock Text="Managed folders" FontSize="15" FontWeight="Bold" Foreground="{StaticResource Text}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                    <TextBlock Foreground="{StaticResource TextMuted}" FontSize="11.5">
+                                        <Run Text="{Binding FolderManager.Folders.Count, Mode=OneWay}"/>
+                                        <Run Text=" folder(s) tracked · click outside this panel to close"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </StackPanel>
+                            <Button Content="&#10005;" Style="{StaticResource MiniButton}" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    Command="{Binding FolderManager.CloseManageFoldersCommand}"/>
+                        </Grid>
+                    </Border>
+
+                    <ListView Grid.Row="1" ItemsSource="{Binding FolderManager.Folders}" BorderThickness="0" Background="{StaticResource BgApp}">
+                        <ListView.Resources>
+                            <Style TargetType="{x:Type ListViewItem}">
+                                <Setter Property="Foreground" Value="{StaticResource Text}"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                            </Style>
+                            <Style TargetType="{x:Type GridViewColumnHeader}">
+                                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                                <Setter Property="Background" Value="{StaticResource SurfaceAlt}"/>
+                            </Style>
+                        </ListView.Resources>
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="On" Width="40">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <CheckBox IsChecked="{Binding IsEnabled, Mode=TwoWay}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="Folder path" Width="560" DisplayMemberBinding="{Binding Path}"/>
+                                <GridViewColumn Header="Last scanned" Width="150" DisplayMemberBinding="{Binding LastScannedDisplay}"/>
+                                <GridViewColumn Header="Items" Width="100" DisplayMemberBinding="{Binding ItemCountDisplay}"/>
+                                <GridViewColumn Header="" Width="80">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Content="Remove" Style="{StaticResource MiniButton}"
+                                                    Command="{Binding DataContext.FolderManager.RemoveFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+
+                    <Border Grid.Row="2" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}"
+                            BorderThickness="0,1,0,0" CornerRadius="0,0,10,10" Padding="20,12">
+                        <Button Content="+ Add folder" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"
+                                Command="{Binding AddFolderCommand}"/>
+                    </Border>
+                </Grid>
+            </Border>
         </Border>
     </Grid>
 </Window>

@@ -119,13 +119,30 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void AddFolder()
     {
-        var dialog = new OpenFolderDialog { Title = "Select a folder to scan" };
+        var dialog = new OpenFolderDialog { Title = "Select one or more folders to scan", Multiselect = true };
         if (dialog.ShowDialog() == true)
         {
-            if (!FolderManager.AddFolder(dialog.FolderName))
+            var added = 0;
+            var alreadyPresent = 0;
+            foreach (var folderName in dialog.FolderNames)
             {
-                StatusMessage = "That folder is already in the list.";
+                if (FolderManager.AddFolder(folderName))
+                {
+                    added++;
+                }
+                else
+                {
+                    alreadyPresent++;
+                }
             }
+
+            StatusMessage = (added, alreadyPresent) switch
+            {
+                (0, > 0) => "Those folders are already in the list.",
+                (> 0, 0) => $"Added {added} folder(s).",
+                (> 0, > 0) => $"Added {added} folder(s); {alreadyPresent} were already in the list.",
+                _ => StatusMessage
+            };
         }
     }
 
@@ -145,6 +162,24 @@ public partial class MainViewModel : ObservableObject
         {
             group.SelectLowQualityCommand.Execute(null);
         }
+    }
+
+    /// <summary>
+    /// Clears every duplicate set currently on screen without re-scanning — also drops
+    /// the in-memory scanned items and expand-state, so a later slider move or re-scan
+    /// starts clean instead of silently repopulating the grid from stale data.
+    /// </summary>
+    [RelayCommand]
+    private void ClearResults()
+    {
+        AppLogger.Info(nameof(MainViewModel), nameof(ClearResults), $"Clearing {FolderResults.Count} folder result(s) from the grid.");
+
+        FolderResults.Clear();
+        _scannedItemsByFolder.Clear();
+        _folderExpandState.Clear();
+        Selection.Reset();
+        OnPropertyChanged(nameof(HasAnyResults));
+        StatusMessage = "Results cleared.";
     }
 
     [RelayCommand]

@@ -12,11 +12,9 @@ public partial class FolderManagerViewModel : ObservableObject
 
     public ObservableCollection<ManagedFolderViewModel> Folders { get; } = new();
 
+    /// <summary>Whether the full-screen "Managed folders" overlay is currently open.</summary>
     [ObservableProperty]
-    private bool _isExpanded;
-
-    [ObservableProperty]
-    private bool _isHidden;
+    private bool _isManageFoldersOpen;
 
     public FolderManagerViewModel()
     {
@@ -44,17 +42,10 @@ public partial class FolderManagerViewModel : ObservableObject
     public event Action<string>? FolderRemoved;
 
     [RelayCommand]
-    private void ToggleExpanded() => IsExpanded = !IsExpanded;
+    private void ToggleManageFolders() => IsManageFoldersOpen = !IsManageFoldersOpen;
 
     [RelayCommand]
-    private void ToggleHidden()
-    {
-        IsHidden = !IsHidden;
-        if (IsHidden)
-        {
-            IsExpanded = false;
-        }
-    }
+    private void CloseManageFolders() => IsManageFoldersOpen = false;
 
     public bool AddFolder(string path)
     {

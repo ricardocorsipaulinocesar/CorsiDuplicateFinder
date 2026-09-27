@@ -62,4 +62,18 @@ public partial class MainWindow : Window
         var parent = VisualTreeHelper.GetParent(element);
         (parent as UIElement)?.RaiseEvent(forwarded);
     }
+
+    private void ManageFoldersBackdrop_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+        {
+            vm.FolderManager.CloseManageFoldersCommand.Execute(null);
+        }
+    }
+
+    /// <summary>Stops a click on the modal sheet itself from bubbling up to the backdrop and closing the overlay.</summary>
+    private void ManageFoldersSheet_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+    }
 }
