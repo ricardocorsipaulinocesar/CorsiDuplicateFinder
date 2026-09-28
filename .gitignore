@@ -5,6 +5,8 @@ obj/
 
 # Published self-contained build output — large, regenerated via dotnet publish
 publish/
+publish-installer/
+installer/Output/
 
 # Runtime logs (AppLogger writes here next to the built exe)
 log/
