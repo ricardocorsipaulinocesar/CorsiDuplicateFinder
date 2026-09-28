@@ -33,6 +33,7 @@
         <conv:InverseBooleanConverter x:Key="InverseBool"/>
         <conv:StringToBrushConverter x:Key="StringToBrush"/>
         <conv:RowHeightFromThumbConverter x:Key="RowHeightFromThumb"/>
+        <conv:FilmstripWidthConverter x:Key="FilmstripWidth"/>
 
         <Style TargetType="Thumb" x:Key="ColumnResizeThumb">
             <Setter Property="Width" Value="8"/>
@@ -124,6 +125,70 @@
             <Setter Property="Foreground" Value="{StaticResource Text}"/>
         </Style>
 
+        <!-- Rounded, always-filled pill — used for "High quality (all)", "Low quality
+             (all)", "Clean results" and "Close all" in the main toolbar. Unlike
+             FilterLabel above (a link: transparent until hovered), a pill's fill is
+             visible at rest so it reads as a button without needing a hover. -->
+        <Style TargetType="Button" x:Key="Pill">
+            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="15">
+                            <!-- A fixed radius (not an arbitrarily large one) is required here: unlike
+                                 CSS border-radius, WPF's CornerRadius does not clamp an oversized value
+                                 down to half the shorter side — it instead stretches into a full ellipse
+                                 (rx=width/2, ry=height/2), losing the straight top/bottom edges that make
+                                 this read as a pill/stadium shape rather than an oval. 15 sits just under
+                                 half this button's own rendered height (~30px), which keeps both corners
+                                 circular with a flat run between them regardless of the button's width.
+
+                                 A translucent white overlay brightens the pill on hover/press, the same
+                                 way regardless of each variant's own fill color — matching the mock's
+                                 filter:brightness(1.12) hover look instead of fading toward transparent. -->
+                            <Grid>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                                <Border x:Name="HoverOverlay" CornerRadius="15" Background="Transparent"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="HoverOverlay" Property="Background" Value="#22FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="HoverOverlay" Property="Background" Value="#33FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="Button" x:Key="PillHq" BasedOn="{StaticResource Pill}">
+            <Setter Property="Background" Value="{StaticResource SuccessSoft}"/>
+            <Setter Property="Foreground" Value="{StaticResource Success}"/>
+            <Setter Property="BorderBrush" Value="#593FCA80"/>
+        </Style>
+        <Style TargetType="Button" x:Key="PillLq" BasedOn="{StaticResource Pill}">
+            <Setter Property="Background" Value="{StaticResource DangerSoft}"/>
+            <Setter Property="Foreground" Value="{StaticResource Danger}"/>
+            <Setter Property="BorderBrush" Value="#59EA6F64"/>
+        </Style>
+        <Style TargetType="Button" x:Key="PillNeutral" BasedOn="{StaticResource Pill}">
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderStrong}"/>
+        </Style>
+        <Style TargetType="Button" x:Key="PillDanger" BasedOn="{StaticResource Pill}">
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="Foreground" Value="{StaticResource Danger}"/>
+            <Setter Property="BorderBrush" Value="#59EA6F64"/>
+        </Style>
+
         <!-- One small link per field in a folder's "Filter all results by:" row — same
              bold/underline-on-hover language as FilterLabel, smaller, muted at rest since
              there are nine of them per folder. Each usage adds its own DataTrigger on
@@ -166,6 +231,36 @@
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Cursor" Value="Hand"/>
         </Style>
+
+        <!-- Flat cell inside the unified thumbnails stepper — no border/radius of its
+             own (the stepper's outer Border supplies both), background brightens on
+             hover/press, matching the mock's plain "-"/"+" stepper cells. -->
+        <Style TargetType="Button" x:Key="StepperButton">
+            <Setter Property="Background" Value="{StaticResource SurfaceAlt}"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{StaticResource AccentSoft}"/>
+                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.35"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -192,6 +287,38 @@
                         <Slider x:Name="SimSlider" Minimum="60" Maximum="100" Width="140" VerticalAlignment="Center"
                                 Value="{Binding SimilarityThreshold, Mode=TwoWay}"/>
                         <TextBlock Text="{Binding SimilarityThreshold, StringFormat={}{0:0}%}" FontWeight="Bold" Foreground="{StaticResource AccentStrong}" Width="40" Margin="6,0,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Regroup-in-progress: the similarity slider triggers a background
+                     re-group (can involve heavy ORB structural matching) that previously
+                     gave no visible sign anything was happening. Shown only while that's
+                     running, and clears itself automatically. -->
+                <Border Background="{StaticResource AccentSoft}" BorderBrush="{StaticResource Accent}" BorderThickness="1"
+                        CornerRadius="20" Padding="10,5" Margin="8,0,0,0"
+                        Visibility="{Binding IsRegrouping, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="7" Height="7" Fill="{StaticResource AccentStrong}" VerticalAlignment="Center" Margin="0,0,7,0">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsRegrouping}" Value="True">
+                                            <DataTrigger.EnterActions>
+                                                <BeginStoryboard x:Name="RegroupPulseStoryboard">
+                                                    <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1.0" To="0.3" Duration="0:0:0.5"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.EnterActions>
+                                            <DataTrigger.ExitActions>
+                                                <StopStoryboard BeginStoryboardName="RegroupPulseStoryboard"/>
+                                            </DataTrigger.ExitActions>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                        <TextBlock Text="Regrouping results..." FontSize="11.5" FontWeight="Bold" Foreground="{StaticResource AccentStrong}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Border>
 
@@ -267,18 +394,89 @@
                                 ToolTip="Open the full-screen managed-folders list"/>
 
                         <Border Width="1" Background="{StaticResource Border}" Margin="10,2" Height="20"/>
-                        <Button Content="High quality (all)" Style="{StaticResource FilterLabelHq}"
+                        <Button Content="High quality (all)" Style="{StaticResource PillHq}"
                                 Command="{Binding ApplyHighQualityToAllCommand}"
                                 ToolTip="In every duplicate set across every folder, keep only the best copy unchecked"/>
-                        <Button Content="Low quality (all)" Style="{StaticResource FilterLabelLq}" Margin="4,0,0,0"
+                        <Button Content="Low quality (all)" Style="{StaticResource PillLq}" Margin="6,0,0,0"
                                 Command="{Binding ApplyLowQualityToAllCommand}"
                                 ToolTip="In every duplicate set across every folder, keep only the worst copy unchecked"/>
-                        <Button Content="Clean results" Style="{StaticResource FilterLabelNeutral}" Margin="4,0,0,0"
+
+                        <Border Width="1" Background="{StaticResource Border}" Margin="10,2" Height="20"/>
+                        <Button Content="Clean results" Style="{StaticResource PillNeutral}"
                                 Command="{Binding ClearResultsCommand}"
                                 ToolTip="Clear every duplicate set currently shown, without re-scanning"/>
-                        <Button Content="Close all" Style="{StaticResource FilterLabelNeutral}" Margin="4,0,0,0"
+                        <Button Content="Close all" Style="{StaticResource PillDanger}" Margin="6,0,0,0"
                                 Command="{Binding CollapseAllFoldersCommand}"
                                 ToolTip="Collapse every expanded folder, without clearing any results"/>
+
+                        <Border Width="1" Background="{StaticResource Border}" Margin="10,2" Height="20"/>
+                        <Grid>
+                            <Button x:Name="ThumbnailsMenuButton" Style="{StaticResource PillNeutral}"
+                                    Command="{Binding ToggleThumbnailsMenuCommand}"
+                                    ToolTip="Choose how many thumbnails each video shows">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock FontWeight="Bold" FontSize="12">
+                                        <Run Text="Thumbnails: "/>
+                                        <Run Text="{Binding ThumbnailsPerVideo, Mode=OneWay}"/>
+                                    </TextBlock>
+                                    <TextBlock Text="&#9660;" FontSize="9" Margin="6,0,0,0" VerticalAlignment="Center" Opacity="0.7">
+                                        <TextBlock.RenderTransform>
+                                            <RotateTransform CenterX="4" CenterY="4"/>
+                                        </TextBlock.RenderTransform>
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsThumbnailsMenuOpen}" Value="True">
+                                                        <Setter Property="RenderTransform">
+                                                            <Setter.Value>
+                                                                <RotateTransform Angle="180" CenterX="4" CenterY="4"/>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Button>
+                            <Popup IsOpen="{Binding IsThumbnailsMenuOpen}" StaysOpen="False" AllowsTransparency="True"
+                                   Placement="Bottom" PlacementTarget="{Binding ElementName=ThumbnailsMenuButton}" VerticalOffset="6">
+                                <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource BorderStrong}" BorderThickness="1"
+                                        CornerRadius="10" Padding="14" Width="260">
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="Black" Opacity="0.5" BlurRadius="24" ShadowDepth="6"/>
+                                    </Border.Effect>
+                                    <StackPanel>
+                                        <TextBlock Text="THUMBNAILS PER VIDEO" FontSize="10.5" FontWeight="Bold"
+                                                   Foreground="{StaticResource TextMuted}" Margin="0,0,0,10"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding ThumbnailsPerVideo}" FontSize="12.5" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource Text}" VerticalAlignment="Center"/>
+                                            <!-- One unified rounded stepper (border around the whole
+                                                 group), not three separate buttons — matches the mock. -->
+                                            <Border Grid.Column="1" BorderBrush="{StaticResource BorderStrong}" BorderThickness="1"
+                                                    CornerRadius="8" ClipToBounds="True">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Button Content="&#8722;" Width="28" Height="28" Style="{StaticResource StepperButton}"
+                                                            Command="{Binding DecrementThumbnailsPerVideoCommand}"/>
+                                                    <TextBlock Text="{Binding ThumbnailsPerVideo}" Width="34" TextAlignment="Center"
+                                                               FontSize="13" FontWeight="Bold" Foreground="{StaticResource Text}" VerticalAlignment="Center"/>
+                                                    <Button Content="&#43;" Width="28" Height="28" Style="{StaticResource StepperButton}"
+                                                            Command="{Binding IncrementThumbnailsPerVideoCommand}"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+                                        <TextBlock TextWrapping="Wrap" FontSize="10.5" Foreground="{StaticResource TextMuted}" Margin="0,10,0,0">
+                                            Com 1, pega sempre o início do vídeo. A partir de 2, calibra entre início, meio e fim — a mesma proporção em todos os resultados. Fica salvo para as próximas vezes.
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+                            </Popup>
+                        </Grid>
                     </StackPanel>
                 </Border>
             </StackPanel>
@@ -540,14 +738,31 @@
                                                                         <DataGridTemplateColumn.CellTemplate>
                                                                             <DataTemplate>
                                                                                 <Border Background="{StaticResource SurfaceAlt}" CornerRadius="4" Margin="4"
-                                                                                        Width="{Binding DataContext.ThumbnailColumnWidth, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                                         Height="{Binding DataContext.ThumbnailColumnWidth, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                                         Cursor="Hand"
                                                                                         MouseLeftButtonUp="ThumbnailBorder_MouseLeftButtonUp">
+                                                                                    <Border.Width>
+                                                                                        <MultiBinding Converter="{StaticResource FilmstripWidth}">
+                                                                                            <Binding Path="DataContext.ThumbnailColumnWidth" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                                                            <Binding Path="Thumbnails.Count"/>
+                                                                                        </MultiBinding>
+                                                                                    </Border.Width>
                                                                                     <Grid>
-                                                                                        <Image Source="{Binding Thumbnail}"
-                                                                                               Stretch="Uniform"
-                                                                                               Width="{Binding DataContext.ThumbnailColumnWidth, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                                                                        <!-- One or more thumbnails side by side (a video filmstrip
+                                                                                             when "Thumbnails per video" > 1, otherwise a single
+                                                                                             image just like a photo) sharing this fixed-size box. -->
+                                                                                        <ItemsControl ItemsSource="{Binding Thumbnails}">
+                                                                                            <ItemsControl.ItemsPanel>
+                                                                                                <ItemsPanelTemplate>
+                                                                                                    <UniformGrid Rows="1"/>
+                                                                                                </ItemsPanelTemplate>
+                                                                                            </ItemsControl.ItemsPanel>
+                                                                                            <ItemsControl.ItemTemplate>
+                                                                                                <DataTemplate>
+                                                                                                    <Image Source="{Binding}" Stretch="UniformToFill"/>
+                                                                                                </DataTemplate>
+                                                                                            </ItemsControl.ItemTemplate>
+                                                                                        </ItemsControl>
                                                                                         <Border Visibility="{Binding IsVideo, Converter={StaticResource BoolToVis}}"
                                                                                                 Background="#33000000">
                                                                                             <TextBlock Text="▶" Foreground="White" FontSize="20"

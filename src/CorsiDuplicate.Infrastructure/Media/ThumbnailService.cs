@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using CorsiDuplicate.Core.Models;
 using CorsiDuplicate.Infrastructure.Scanning;
 using SixLabors.ImageSharp;
@@ -8,9 +10,14 @@ using SixLabors.ImageSharp.Processing;
 namespace CorsiDuplicate.Infrastructure.Media;
 
 /// <summary>
-/// Generates and caches a small (max 256px side) JPEG thumbnail per scanned file under
+/// Generates and caches small (max 256px side) JPEG thumbnails per scanned file under
 /// %LocalAppData%\CorsiDuplicate\thumbs\, keyed by content (path+size+lastWriteUtc) so
-/// unchanged files never regenerate their thumbnail on a later scan.
+/// unchanged files never regenerate their thumbnails on a later scan. A photo always
+/// gets exactly one thumbnail; a video gets a user-configurable count, sampled at evenly
+/// spaced fractions of its duration — 1 thumbnail is always the very start of the video,
+/// 2+ always include both the start and the end, with any remaining ones spread evenly
+/// between — the same fractions for every video, so equivalent scenes line up across
+/// results and are easy to compare at a glance.
 /// </summary>
 public sealed class ThumbnailService
 {
@@ -25,17 +32,51 @@ public sealed class ThumbnailService
         Directory.CreateDirectory(_thumbDirectory);
     }
 
-    public string PathFor(MediaItem item)
+    /// <summary>The single canonical thumbnail path for an item — stable regardless of
+    /// the user's display thumbnail count, used as the fixed identity for signals like
+    /// the "sort by thumbnail similarity" feature.</summary>
+    public string PathFor(MediaItem item) => PathForFrame(item, index: 0, count: 1);
+
+    private string PathForFrame(MediaItem item, int index, int count)
     {
-        var key = ScanCacheStore.CacheKey(item.FullPath, item.SizeBytes, item.LastWriteUtc);
-        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key)));
+        var key = ScanCacheStore.CacheKey(item.FullPath, item.SizeBytes, item.LastWriteUtc) + $"|{count}|{index}";
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
         return Path.Combine(_thumbDirectory, hash + ".jpg");
     }
 
-    /// <summary>Generates the thumbnail if it doesn't already exist. Returns the cache path, or null on failure.</summary>
-    public async Task<string?> EnsureThumbnailAsync(MediaItem item, CancellationToken ct = default)
+    /// <summary>Generates the single canonical thumbnail if it doesn't already exist. Returns the cache path, or null on failure.</summary>
+    public Task<string?> EnsureThumbnailAsync(MediaItem item, CancellationToken ct = default) =>
+        EnsureFrameAsync(item, index: 0, count: 1, ct);
+
+    /// <summary>
+    /// Generates the requested number of display thumbnails for an item (photos always
+    /// return exactly one, ignoring <paramref name="count"/>) and returns whichever paths
+    /// were produced successfully, in order.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> EnsureThumbnailsAsync(MediaItem item, int count, CancellationToken ct = default)
     {
-        var outPath = PathFor(item);
+        if (item.Kind == MediaKind.Photo)
+        {
+            var single = await EnsureFrameAsync(item, index: 0, count: 1, ct);
+            return single is null ? Array.Empty<string>() : new[] { single };
+        }
+
+        var frameCount = Math.Max(1, count);
+        var paths = new List<string>(frameCount);
+        for (var i = 0; i < frameCount; i++)
+        {
+            var path = await EnsureFrameAsync(item, i, frameCount, ct);
+            if (path is not null)
+            {
+                paths.Add(path);
+            }
+        }
+        return paths;
+    }
+
+    private async Task<string?> EnsureFrameAsync(MediaItem item, int index, int count, CancellationToken ct)
+    {
+        var outPath = PathForFrame(item, index, count);
         if (File.Exists(outPath))
         {
             return outPath;
@@ -55,15 +96,15 @@ public sealed class ThumbnailService
                 return outPath;
             }
 
-            // Video: grab one frame partway through, then downscale the same way as a photo.
             if (item.Duration is { } duration && duration > TimeSpan.Zero)
             {
                 await FfmpegBinaryProvisioner.EnsureAvailableAsync(ct);
+                var fraction = FractionFor(index, count);
                 var framePath = Path.Combine(Path.GetTempPath(), $"cd_thumb_{Guid.NewGuid()}.jpg");
                 try
                 {
                     await FFMpegCore.FFMpegArguments
-                        .FromFileInput(item.FullPath, verifyExists: false, opt => opt.Seek(TimeSpan.FromSeconds(duration.TotalSeconds * 0.2)))
+                        .FromFileInput(item.FullPath, verifyExists: false, opt => opt.Seek(TimeSpan.FromSeconds(duration.TotalSeconds * fraction)))
                         .OutputToFile(framePath, overwrite: true, opt => opt.WithFrameOutputCount(1))
                         .CancellableThrough(ct)
                         .ProcessAsynchronously();
@@ -94,5 +135,27 @@ public sealed class ThumbnailService
         {
             return null;
         }
+    }
+
+    // Kept just off the literal 0%/100% marks — seeking to the exact first/last frame
+    // often lands on a black fade or title-card frame, which isn't a representative
+    // "start"/"end" thumbnail.
+    private const double EdgeInset = 0.02;
+
+    /// <summary>
+    /// 1 thumbnail: always the start. 2+: evenly spaced from start to end inclusive, so
+    /// every video's Nth thumbnail lands at the same proportional point, no matter how
+    /// long the video is — the same fractions for every result, to make comparing
+    /// equivalent scenes across videos straightforward.
+    /// </summary>
+    private static double FractionFor(int index, int count)
+    {
+        if (count <= 1)
+        {
+            return EdgeInset;
+        }
+
+        var span = 1.0 - 2 * EdgeInset;
+        return EdgeInset + span * index / (count - 1);
     }
 }

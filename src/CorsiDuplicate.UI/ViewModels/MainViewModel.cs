@@ -11,6 +11,7 @@ using CorsiDuplicate.Core.Models;
 using CorsiDuplicate.Infrastructure.IO;
 using CorsiDuplicate.Infrastructure.Logging;
 using CorsiDuplicate.Infrastructure.Matching;
+using CorsiDuplicate.Infrastructure.Persistence;
 using CorsiDuplicate.Infrastructure.Scanning;
 using Microsoft.Win32;
 
@@ -93,6 +94,21 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isProgressIndeterminate;
 
+    // Lightweight, non-blocking indicator (unlike IsProcessing's modal) that a
+    // similarity-slider-triggered regroup is running in the background — the
+    // async/debounced regroup previously gave no visible sign anything was happening.
+    [ObservableProperty]
+    private bool _isRegrouping;
+
+    [ObservableProperty]
+    private bool _isThumbnailsMenuOpen;
+
+    private readonly AppSettingsStore _appSettingsStore = new();
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DecrementThumbnailsPerVideoCommand))]
+    private int _thumbnailsPerVideo = 1;
+
     public bool HasAnyResults => FolderResults.Count > 0;
 
     public MainViewModel()
@@ -106,6 +122,43 @@ public partial class MainViewModel : ObservableObject
         };
 
         FolderManager.FolderRemoved += OnFolderRemoved;
+
+        var settings = _appSettingsStore.Load();
+        ThumbnailsPerVideo = Math.Max(1, settings.ThumbnailsPerVideo);
+        MediaItemViewModel.ThumbnailsPerVideo = ThumbnailsPerVideo;
+    }
+
+    [RelayCommand]
+    private void ToggleThumbnailsMenu() => IsThumbnailsMenuOpen = !IsThumbnailsMenuOpen;
+
+    [RelayCommand(CanExecute = nameof(CanDecrementThumbnailsPerVideo))]
+    private void DecrementThumbnailsPerVideo() => SetThumbnailsPerVideo(ThumbnailsPerVideo - 1);
+
+    private bool CanDecrementThumbnailsPerVideo() => ThumbnailsPerVideo > 1;
+
+    [RelayCommand]
+    private void IncrementThumbnailsPerVideo() => SetThumbnailsPerVideo(ThumbnailsPerVideo + 1);
+
+    /// <summary>
+    /// 1–7 thumbnails per video, persisted immediately, and applied to every video row
+    /// already on screen (not just future scans) so the change is visible right away.
+    /// </summary>
+    private void SetThumbnailsPerVideo(int value)
+    {
+        value = Math.Clamp(value, 1, 7);
+        if (value == ThumbnailsPerVideo)
+        {
+            return;
+        }
+
+        ThumbnailsPerVideo = value;
+        MediaItemViewModel.ThumbnailsPerVideo = value;
+        _appSettingsStore.Save(new AppSettings { ThumbnailsPerVideo = value });
+
+        foreach (var item in FolderResults.SelectMany(f => f.Groups).SelectMany(g => g.Items).Where(i => i.IsVideo))
+        {
+            item.ReloadThumbnails();
+        }
     }
 
     /// <summary>
@@ -536,6 +589,7 @@ public partial class MainViewModel : ObservableObject
         var threshold = SimilarityThreshold;
 
         List<(string FolderPath, List<DuplicateGroup> Groups, int ItemCount)> perFolder;
+        IsRegrouping = true;
         await _regroupLock.WaitAsync();
         try
         {
@@ -560,6 +614,7 @@ public partial class MainViewModel : ObservableObject
         finally
         {
             _regroupLock.Release();
+            IsRegrouping = false;
         }
 
         if (myVersion != _regroupRequestVersion)

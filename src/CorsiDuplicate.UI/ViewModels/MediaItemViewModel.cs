@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -11,6 +12,11 @@ public partial class MediaItemViewModel : ObservableObject
 {
     private static readonly ThumbnailService ThumbnailService = new();
 
+    // How many thumbnails a video row displays — shared by every item so they all follow
+    // the same setting, kept in sync by MainViewModel from the persisted app setting.
+    // Photos always show exactly one, regardless of this value.
+    public static int ThumbnailsPerVideo { get; set; } = 1;
+
     public MediaItem Model { get; }
     public string FolderPath { get; }
 
@@ -21,34 +27,39 @@ public partial class MediaItemViewModel : ObservableObject
     {
         Model = model;
         FolderPath = folderPath;
-        _ = LoadThumbnailAsync();
+        _ = LoadThumbnailsAsync();
     }
 
     [ObservableProperty]
     private bool _isSelected;
 
     [ObservableProperty]
-    private BitmapImage? _thumbnail;
-
-    [ObservableProperty]
     private string? _hashGroupColor;
+
+    public ObservableCollection<BitmapImage> Thumbnails { get; } = new();
 
     partial void OnIsSelectedChanged(bool value) => SelectionChanged?.Invoke(this);
 
-    private async Task LoadThumbnailAsync()
+    /// <summary>Re-fetches/regenerates this item's thumbnails — called after the user
+    /// changes <see cref="ThumbnailsPerVideo"/> so already-displayed rows update too.</summary>
+    public void ReloadThumbnails() => _ = LoadThumbnailsAsync();
+
+    private async Task LoadThumbnailsAsync()
     {
-        var path = await ThumbnailService.EnsureThumbnailAsync(Model);
-        if (path is null)
+        var count = IsVideo ? ThumbnailsPerVideo : 1;
+        var paths = await ThumbnailService.EnsureThumbnailsAsync(Model, count);
+        if (paths.Count == 0)
         {
             return;
         }
 
         // Decoding is real CPU/disk work; doing it on a background thread keeps the
         // UI thread free while the results grid virtualizes rows in and out of view.
-        var bitmap = await Task.Run(() => DecodeThumbnail(path));
-        if (bitmap is not null)
+        var bitmaps = await Task.Run(() => paths.Select(DecodeThumbnail).Where(b => b is not null).Cast<BitmapImage>().ToList());
+        Thumbnails.Clear();
+        foreach (var bitmap in bitmaps)
         {
-            Thumbnail = bitmap;
+            Thumbnails.Add(bitmap);
         }
     }
 
@@ -85,9 +96,10 @@ public partial class MediaItemViewModel : ObservableObject
     public string HashHex => Model.HashHex;
     public bool IsVideo => Model.Kind == MediaKind.Video;
 
-    // The exact generated thumbnail file (JPEG frame for a video, resized copy for a
-    // photo) already produced for display — used as the sole input for the "sort sets
-    // by thumbnail similarity" feature, per that feature's requirement.
+    // The single canonical generated thumbnail (JPEG frame for a video, resized copy for
+    // a photo) — stable regardless of the user's display thumbnail count, used as the
+    // sole input for the "sort sets by thumbnail similarity" feature, per that feature's
+    // requirement.
     public string ThumbnailPath => ThumbnailService.PathFor(Model);
 
     [RelayCommand]
