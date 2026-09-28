@@ -27,8 +27,14 @@ public partial class MediaItemViewModel : ObservableObject
     {
         Model = model;
         FolderPath = folderPath;
-        _ = LoadThumbnailsAsync();
+        ThumbnailsReadyTask = LoadThumbnailsAsync();
     }
+
+    // The in-flight (or already-finished) thumbnail generation for this item. A caller that
+    // needs to know when generation has genuinely finished — not just when the scan/grouping
+    // step handed back results — awaits this instead of assuming thumbnails are ready the
+    // moment the item appears, since loading/generating them is a separate background step.
+    public Task ThumbnailsReadyTask { get; private set; }
 
     [ObservableProperty]
     private bool _isSelected;
@@ -42,7 +48,7 @@ public partial class MediaItemViewModel : ObservableObject
 
     /// <summary>Re-fetches/regenerates this item's thumbnails — called after the user
     /// changes <see cref="ThumbnailsPerVideo"/> so already-displayed rows update too.</summary>
-    public void ReloadThumbnails() => _ = LoadThumbnailsAsync();
+    public void ReloadThumbnails() => ThumbnailsReadyTask = LoadThumbnailsAsync();
 
     private async Task LoadThumbnailsAsync()
     {

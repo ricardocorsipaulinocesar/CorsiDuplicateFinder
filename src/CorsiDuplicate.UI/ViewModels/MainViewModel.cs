@@ -103,6 +103,16 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isThumbnailsMenuOpen;
 
+    // Thumbnail images are generated in the background, independently of the scan/grouping
+    // step that produces the result rows — with several thumbnails per video this can still
+    // be running well after "Scan complete" would otherwise show. Tracks every newly created
+    // item's own thumbnail task so the final status message waits for them too, instead of
+    // reporting done while images are still visibly popping in one by one.
+    [ObservableProperty]
+    private bool _isGeneratingThumbnails;
+
+    private readonly List<Task> _pendingThumbnailTasks = new();
+
     private readonly AppSettingsStore _appSettingsStore = new();
 
     [ObservableProperty]
@@ -479,6 +489,11 @@ public partial class MainViewModel : ObservableObject
                 }
             }
 
+            // Grouping is done at this point, but thumbnails for the items it produced may
+            // still be generating in the background — wait for those too before telling the
+            // user the scan is finished, so "complete" only shows once everything actually is.
+            await WaitForPendingThumbnailsAsync();
+
             if (cancelled)
             {
                 StatusMessage = "Scan stopped.";
@@ -664,7 +679,44 @@ public partial class MainViewModel : ObservableObject
         var vm = new MediaItemViewModel(item, folderPath);
         vm.SelectionChanged += _ => Selection.OnSelectionChanged(vm);
         vm.PlayRequested += OnPlayRequested;
+        _pendingThumbnailTasks.Add(vm.ThumbnailsReadyTask);
         return vm;
+    }
+
+    /// <summary>Waits for every thumbnail generated since the last call to finish, updating
+    /// <see cref="StatusMessage"/> with a running count so the user can see there's still
+    /// work happening even after grouping itself is done. A no-op when nothing is pending.</summary>
+    private async Task WaitForPendingThumbnailsAsync()
+    {
+        var pending = _pendingThumbnailTasks.Where(t => !t.IsCompleted).ToList();
+        _pendingThumbnailTasks.Clear();
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        IsGeneratingThumbnails = true;
+        var total = pending.Count;
+        var done = 0;
+        StatusMessage = $"Generating thumbnails... 0/{total}";
+
+        await Task.WhenAll(pending.Select(async task =>
+        {
+            try
+            {
+                await task;
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error(nameof(MainViewModel), nameof(WaitForPendingThumbnailsAsync),
+                    "A thumbnail failed to generate.", ex);
+            }
+
+            var finished = Interlocked.Increment(ref done);
+            StatusMessage = $"Generating thumbnails... {finished}/{total}";
+        }));
+
+        IsGeneratingThumbnails = false;
     }
 
     private void OnPlayRequested(MediaItemViewModel item)

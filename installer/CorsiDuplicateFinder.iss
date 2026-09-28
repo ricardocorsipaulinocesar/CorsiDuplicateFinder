@@ -11,7 +11,15 @@
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Ricardo Corsi Paulino Cesar"
 #define MyAppExeName "CorsiDuplicate.UI.exe"
-#define MyPublishDir "..\publish-installer"
+
+; MyPublishDir can be overridden from the command line (ISCC /DMyPublishDir="C:\...\publish")
+; — the MSBuild "BuildInstaller" target in CorsiDuplicate.UI.csproj does this automatically,
+; pointing it at whatever folder that particular publish actually went to. Compiling this
+; script directly in the Inno Setup IDE (no /D passed) falls back to the manual workflow's
+; fixed folder name instead.
+#ifndef MyPublishDir
+  #define MyPublishDir "..\publish-installer"
+#endif
 
 [Setup]
 AppId={{E6C9C6A5-3E0E-4C1B-9C5A-6B2C1E2C6A11}
