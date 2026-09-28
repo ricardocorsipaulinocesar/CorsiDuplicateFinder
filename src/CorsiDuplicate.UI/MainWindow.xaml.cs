@@ -63,6 +63,23 @@ public partial class MainWindow : Window
         (parent as UIElement)?.RaiseEvent(forwarded);
     }
 
+    /// <summary>
+    /// Handles every button in a folder's "Filter all results by:" row (Thumb, File,
+    /// Size, Length, Resolution, Bit rate, Audio, Match, Hash — see MainWindow.xaml).
+    /// Unlike the old per-set "Thumb" column header, this row lives directly inside the
+    /// folder's own DataTemplate, so DataContext here is already the correct
+    /// FolderResultsViewModel with no DataGridColumn quirk to work around. Each button's
+    /// Tag carries which field it filters by.
+    /// </summary>
+    private void FolderFilter_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: FolderResultsViewModel folder, Tag: string filterKey } &&
+            DataContext is MainViewModel vm)
+        {
+            vm.ToggleFolderFilterCommand.Execute(new FolderFilterRequest(folder, filterKey));
+        }
+    }
+
     private void ManageFoldersBackdrop_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (DataContext is MainViewModel vm)

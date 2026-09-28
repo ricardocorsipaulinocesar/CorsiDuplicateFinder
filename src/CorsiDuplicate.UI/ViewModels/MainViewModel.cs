@@ -16,12 +16,25 @@ using Microsoft.Win32;
 
 namespace CorsiDuplicate.UI.ViewModels;
 
+/// <summary>
+/// Carries both pieces the folder-wide filter row's toggle command needs from a single
+/// CommandParameter binding: which folder, and which field to filter/sort the whole
+/// folder by ("Thumb", "File", "Size", "Length", "Resolution", "Bit rate", "Audio",
+/// "Match", or "Hash" — matching each filter button's own Tag/Content).
+/// </summary>
+public sealed record FolderFilterRequest(FolderResultsViewModel Folder, string FilterKey);
+
 public partial class MainViewModel : ObservableObject
 {
     private readonly ScanPipeline _scanPipeline = new();
     private readonly OrbStructuralMatcher _structuralMatcher = new();
     private readonly IGroupingStrategy _grouper;
     private readonly IRecycleBinService _recycleBin = new RecycleBinService();
+
+    // Dedicated scorer for the "sort sets by thumbnail similarity" feature — separate
+    // from _structuralMatcher (used for full-resolution duplicate detection) since this
+    // one only ever sees the small generated thumbnail images.
+    private static readonly ThumbnailSimilarityScorer ThumbnailScorer = new();
 
     // Raw scanned items per folder, kept in memory so the similarity slider can
     // re-group instantly without ever touching disk/FFmpeg again.
@@ -57,6 +70,16 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private string _statusMessage = "Ready.";
+
+    // Drives a small "thinking" overlay for any slow filter/results action (currently
+    // only the thumbnail-similarity sort, since ORB structural matching can take a
+    // moment) — a future slow action can reuse it by setting ProcessingMessage and
+    // toggling IsProcessing the same way. Cleared automatically once the action finishes.
+    [ObservableProperty]
+    private bool _isProcessing;
+
+    [ObservableProperty]
+    private string _processingMessage = "Processing...";
 
     [ObservableProperty]
     private double _thumbnailColumnWidth = 120;
@@ -181,6 +204,143 @@ public partial class MainViewModel : ObservableObject
         Selection.Reset();
         OnPropertyChanged(nameof(HasAnyResults));
         StatusMessage = "Results cleared.";
+    }
+
+    /// <summary>Collapses every folder currently expanded on screen, without discarding any results.</summary>
+    [RelayCommand]
+    private void CollapseAllFolders()
+    {
+        foreach (var folder in FolderResults)
+        {
+            folder.IsExpanded = false;
+        }
+    }
+
+    /// <summary>
+    /// Toggles a folder between its normal detection-order Sets and a single flattened
+    /// view that ignores Set boundaries entirely: every row (item) across every Set in
+    /// that folder — and only that folder — is reordered by one field ("Thumb" via
+    /// generated-thumbnail similarity, everything else via a plain comparison), as one
+    /// new result. Toggling the same filter again restores the exact original Sets;
+    /// clicking a different filter while one is active switches straight to it. Every
+    /// filter action (not just "Thumb") runs off the UI thread and shows the
+    /// <see cref="IsProcessing"/> overlay for its duration, so there's always a visible
+    /// "something is happening" signal even for the fast, simple-comparison filters.
+    /// </summary>
+    [RelayCommand]
+    private async Task ToggleFolderFilterAsync(FolderFilterRequest? request)
+    {
+        if (request is not { Folder: { } folder, FilterKey: { } key })
+        {
+            return;
+        }
+
+        if (folder.ActiveFolderFilter == key)
+        {
+            folder.RestoreOriginalGroupOrder();
+            return;
+        }
+
+        var allItems = folder.Groups.SelectMany(g => g.Items).ToList();
+        if (allItems.Count < 2)
+        {
+            return;
+        }
+
+        ProcessingMessage = key == "Thumb" ? "Comparing thumbnails..." : $"Sorting by {key.ToLowerInvariant()}...";
+        IsProcessing = true;
+        List<MediaItemViewModel> orderedItems;
+        try
+        {
+            var workTask = key == "Thumb"
+                ? Task.Run(() => OrderItemsByThumbnailSimilarity(allItems))
+                : Task.Run(() => OrderItemsByField(allItems, key));
+
+            // The plain-field sorts finish in well under a millisecond — fast enough
+            // that IsProcessing could flip true then false again before WPF ever paints
+            // a frame with the overlay visible, making the modal appear not to show at
+            // all. Waiting on this alongside the real work guarantees the overlay is up
+            // long enough to actually be seen, for every filter, not just "Thumb".
+            await Task.WhenAll(workTask, Task.Delay(300));
+            orderedItems = await workTask;
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error(nameof(MainViewModel), nameof(ToggleFolderFilterAsync),
+                $"Failed to filter folder '{folder.Path}' by '{key}': {ex.Message}");
+            return;
+        }
+        finally
+        {
+            IsProcessing = false;
+        }
+
+        var flatGroup = new DuplicateGroupViewModel(new DuplicateGroup(), folder.Path, orderedItems)
+        {
+            SetNumber = 1,
+            CustomLabel = $"All results — sorted by {key.ToLowerInvariant()}",
+            Owner = folder
+        };
+        folder.ApplyFlattenedOrder(new List<DuplicateGroupViewModel> { flatGroup }, key);
+    }
+
+    /// <summary>Plain, synchronous comparison for every folder-wide filter except "Thumb".</summary>
+    private static List<MediaItemViewModel> OrderItemsByField(List<MediaItemViewModel> items, string key) => key switch
+    {
+        "File" => items.OrderBy(i => i.FileName, StringComparer.OrdinalIgnoreCase).ToList(),
+        "Size" => items.OrderByDescending(i => i.Model.SizeBytes).ToList(),
+        "Length" => items.OrderByDescending(i => i.Model.Duration ?? TimeSpan.Zero).ToList(),
+        "Resolution" => items.OrderByDescending(i => (long)i.Model.Width * i.Model.Height).ToList(),
+        "Bit rate" => items.OrderByDescending(i => i.Model.BitRateBps ?? 0).ToList(),
+        "Audio" => items.OrderByDescending(i => i.Model.AudioSampleRateHz ?? 0).ToList(),
+        "Match" => items.OrderByDescending(i => i.Model.SimilarityToReferencePercent).ToList(),
+        "Hash" => items.OrderBy(i => i.HashHex, StringComparer.OrdinalIgnoreCase).ToList(),
+        _ => items,
+    };
+
+    /// <summary>
+    /// Greedy nearest-neighbor chain over every individual item of a folder (never just
+    /// one representative per Set): starting from the first item, repeatedly appends
+    /// whichever remaining item's thumbnail is most similar to the current one — clusters
+    /// visually similar items adjacently regardless of which original Set they came from.
+    /// </summary>
+    private static List<MediaItemViewModel> OrderItemsByThumbnailSimilarity(List<MediaItemViewModel> items)
+    {
+        var withThumbnail = items.Where(i => i.ThumbnailPath is not null).ToList();
+        var withoutThumbnail = items.Where(i => i.ThumbnailPath is null).ToList();
+
+        var ordered = new List<MediaItemViewModel>();
+        if (withThumbnail.Count == 0)
+        {
+            return items;
+        }
+
+        var remaining = new List<MediaItemViewModel>(withThumbnail);
+        var current = remaining[0];
+        remaining.RemoveAt(0);
+        ordered.Add(current);
+
+        while (remaining.Count > 0)
+        {
+            var bestIndex = 0;
+            var bestScore = -1.0;
+            for (var i = 0; i < remaining.Count; i++)
+            {
+                var score = ThumbnailScorer.Compare(current.ThumbnailPath!, remaining[i].ThumbnailPath!);
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestIndex = i;
+                }
+            }
+
+            current = remaining[bestIndex];
+            remaining.RemoveAt(bestIndex);
+            ordered.Add(current);
+        }
+
+        ordered.AddRange(withoutThumbnail);
+        return ordered;
     }
 
     [RelayCommand]
@@ -435,7 +595,7 @@ public partial class MainViewModel : ObservableObject
                         ? existing
                         : CreateItemViewModel(i, folderPath))
                     .ToList();
-                folderVm.Groups.Add(new DuplicateGroupViewModel(group, folderPath, itemVms) { SetNumber = setNumber++ });
+                folderVm.Groups.Add(new DuplicateGroupViewModel(group, folderPath, itemVms) { SetNumber = setNumber++, Owner = folderVm });
             }
             FolderResults.Add(folderVm);
         }
@@ -567,6 +727,14 @@ public sealed partial class FolderResultsViewModel : ObservableObject
     [ObservableProperty]
     private bool _isExpanded;
 
+    // Which folder-wide filter (if any) is currently flattening this folder's Sets into
+    // one result — "Thumb", "File", "Size", "Length", "Resolution", "Bit rate", "Audio",
+    // "Match", "Hash", or null when showing the normal, detection-order Sets.
+    [ObservableProperty]
+    private string? _activeFolderFilter;
+
+    private List<DuplicateGroupViewModel>? _originalGroupOrder;
+
     public FolderResultsViewModel(string path, int fileCount)
     {
         Path = path;
@@ -577,4 +745,30 @@ public sealed partial class FolderResultsViewModel : ObservableObject
 
     [RelayCommand]
     private void ToggleExpanded() => IsExpanded = !IsExpanded;
+
+    public void ApplyFlattenedOrder(IReadOnlyList<DuplicateGroupViewModel> ordered, string filterKey)
+    {
+        _originalGroupOrder ??= Groups.ToList();
+        Groups.Clear();
+        foreach (var group in ordered)
+        {
+            Groups.Add(group);
+        }
+        ActiveFolderFilter = filterKey;
+    }
+
+    public void RestoreOriginalGroupOrder()
+    {
+        if (_originalGroupOrder is null)
+        {
+            return;
+        }
+
+        Groups.Clear();
+        foreach (var group in _originalGroupOrder)
+        {
+            Groups.Add(group);
+        }
+        ActiveFolderFilter = null;
+    }
 }

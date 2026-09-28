@@ -78,6 +78,84 @@
             <Setter Property="Foreground" Value="{StaticResource Danger}"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
         </Style>
+        <!-- Bold, borderless clickable text used for every results filter/action label
+             ("High/Low quality (all)", "Clean results", "Close all", the "Thumb" sort
+             header) — a subtle highlight on hover is the only affordance, so the label
+             itself (not a button box around it) reads as the control. -->
+        <Style TargetType="Button" x:Key="FilterLabel">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <!-- A named TextBlock (instead of a plain ContentPresenter) so the
+                                 IsMouseOver trigger below can underline it directly — the
+                                 underline is what marks this label as clickable, matching
+                                 the "Thumb" header and every per-set column header. -->
+                            <TextBlock x:Name="LabelText" Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
+                                       FontWeight="{TemplateBinding FontWeight}" FontSize="{TemplateBinding FontSize}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#14FFFFFF"/>
+                                <Setter TargetName="LabelText" Property="TextDecorations" Value="Underline"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#22FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="Button" x:Key="FilterLabelHq" BasedOn="{StaticResource FilterLabel}">
+            <Setter Property="Foreground" Value="{StaticResource Success}"/>
+        </Style>
+        <Style TargetType="Button" x:Key="FilterLabelLq" BasedOn="{StaticResource FilterLabel}">
+            <Setter Property="Foreground" Value="{StaticResource Danger}"/>
+        </Style>
+        <Style TargetType="Button" x:Key="FilterLabelNeutral" BasedOn="{StaticResource FilterLabel}">
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+        </Style>
+
+        <!-- One small link per field in a folder's "Filter all results by:" row — same
+             bold/underline-on-hover language as FilterLabel, smaller, muted at rest since
+             there are nine of them per folder. Each usage adds its own DataTrigger on
+             ActiveFolderFilter (see the folder DataTemplate) to highlight when active,
+             since the trigger's Value differs per button. -->
+        <Style TargetType="Button" x:Key="FolderFilterLink">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="Margin" Value="0,0,2,0"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <TextBlock x:Name="LabelText" Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
+                                       FontWeight="{TemplateBinding FontWeight}" FontSize="{TemplateBinding FontSize}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#14FFFFFF"/>
+                                <Setter TargetName="LabelText" Property="TextDecorations" Value="Underline"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style TargetType="Button" x:Key="MiniButton">
             <Setter Property="Padding" Value="8,4"/>
             <Setter Property="Background" Value="{StaticResource Surface}"/>
@@ -189,15 +267,18 @@
                                 ToolTip="Open the full-screen managed-folders list"/>
 
                         <Border Width="1" Background="{StaticResource Border}" Margin="10,2" Height="20"/>
-                        <Button Content="High quality (all)" Style="{StaticResource HqButton}" Padding="8,3"
+                        <Button Content="High quality (all)" Style="{StaticResource FilterLabelHq}"
                                 Command="{Binding ApplyHighQualityToAllCommand}"
                                 ToolTip="In every duplicate set across every folder, keep only the best copy unchecked"/>
-                        <Button Content="Low quality (all)" Style="{StaticResource LqButton}" Padding="8,3" Margin="6,0,0,0"
+                        <Button Content="Low quality (all)" Style="{StaticResource FilterLabelLq}" Margin="4,0,0,0"
                                 Command="{Binding ApplyLowQualityToAllCommand}"
                                 ToolTip="In every duplicate set across every folder, keep only the worst copy unchecked"/>
-                        <Button Content="Clean results" Style="{StaticResource ToolButton}" Padding="8,3" Margin="6,0,0,0"
+                        <Button Content="Clean results" Style="{StaticResource FilterLabelNeutral}" Margin="4,0,0,0"
                                 Command="{Binding ClearResultsCommand}"
                                 ToolTip="Clear every duplicate set currently shown, without re-scanning"/>
+                        <Button Content="Close all" Style="{StaticResource FilterLabelNeutral}" Margin="4,0,0,0"
+                                Command="{Binding CollapseAllFoldersCommand}"
+                                ToolTip="Collapse every expanded folder, without clearing any results"/>
                     </StackPanel>
                 </Border>
             </StackPanel>
@@ -240,6 +321,141 @@
                                         </StackPanel>
                                     </Border>
 
+                                    <!-- Folder-wide filter row: unlike the column headers inside each
+                                         Set below (which only sort that one Set's own grid), every
+                                         filter here ignores Set boundaries and reorders every result
+                                         in this folder — and only this folder — as one flat list.
+                                         Clicking the active one again restores the original Sets;
+                                         clicking a different one switches straight to it. -->
+                                    <Border Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}"
+                                            BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="10,7">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="FILTER ALL RESULTS BY:" FontSize="9.5" FontWeight="Bold"
+                                                       Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+
+                                            <Button Content="Thumb" Tag="Thumb" Click="FolderFilter_Click"
+                                                    ToolTip="Sort all results in this folder by thumbnail visual similarity">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Thumb">
+                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
+                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                            <!-- Each of these carries one fixed direction (never both) — a
+                                                 single up or down arrow prefix says which, muted at rest and
+                                                 accent-colored once that filter is the active one. -->
+                                            <Button Content="&#9650; File" Tag="File" Click="FolderFilter_Click"
+                                                    ToolTip="Sort all results in this folder by file name (A→Z)">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="File">
+                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
+                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                            <Button Content="&#9660; Size" Tag="Size" Click="FolderFilter_Click"
+                                                    ToolTip="Sort all results in this folder by file size (largest first)">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Size">
+                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
+                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                            <Button Content="&#9660; Length" Tag="Length" Click="FolderFilter_Click"
+                                                    ToolTip="Sort all results in this folder by duration (longest first)">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Length">
+                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
+                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                            <Button Content="&#9660; Resolution" Tag="Resolution" Click="FolderFilter_Click"
+                                                    ToolTip="Sort all results in this folder by resolution (highest first)">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Resolution">
+                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
+                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                            <Button Content="&#9660; Bit rate" Tag="Bit rate" Click="FolderFilter_Click"
+                                                    ToolTip="Sort all results in this folder by bit rate (highest first)">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Bit rate">
+                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
+                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                            <Button Content="&#9660; Audio" Tag="Audio" Click="FolderFilter_Click"
+                                                    ToolTip="Sort all results in this folder by audio sample rate (highest first)">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Audio">
+                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
+                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                            <Button Content="&#9660; Match" Tag="Match" Click="FolderFilter_Click"
+                                                    ToolTip="Sort all results in this folder by match % (highest first)">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Match">
+                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
+                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                            <Button Content="&#9650; Hash" Tag="Hash" Click="FolderFilter_Click"
+                                                    ToolTip="Sort all results in this folder by hash (A→Z)">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Hash">
+                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
+                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                        </StackPanel>
+                                    </Border>
+
                                     <StackPanel Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}" Margin="10,10,10,10">
                                         <ItemsControl ItemsSource="{Binding Groups}">
                                             <ItemsControl.ItemTemplate>
@@ -265,11 +481,23 @@
                                                                       EnableRowVirtualization="True" HorizontalScrollBarVisibility="Auto"
                                                                       PreviewMouseWheel="ResultsDataGrid_PreviewMouseWheel">
                                                                 <DataGrid.Resources>
+                                                                    <!-- These headers already sort the grid on click (default DataGrid
+                                                                         behavior) but looked like plain labels; bold + hand cursor +
+                                                                         an accent-colored hover state now mark them as clickable, the
+                                                                         same "this can be clicked" language used by "Thumb" and every
+                                                                         toolbar filter. -->
                                                                     <Style TargetType="DataGridColumnHeader">
                                                                         <Setter Property="Background" Value="{StaticResource SurfaceAlt}"/>
                                                                         <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
                                                                         <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
                                                                         <Setter Property="Padding" Value="8,6"/>
+                                                                        <Setter Property="FontWeight" Value="Bold"/>
+                                                                        <Setter Property="Cursor" Value="Hand"/>
+                                                                        <Style.Triggers>
+                                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
+                                                                            </Trigger>
+                                                                        </Style.Triggers>
                                                                     </Style>
                                                                 </DataGrid.Resources>
                                                                 <DataGrid.RowStyle>
@@ -298,7 +526,12 @@
                                                                         <DataGridTemplateColumn.HeaderTemplate>
                                                                             <DataTemplate>
                                                                                 <Grid>
-                                                                                    <TextBlock Text="Thumb" VerticalAlignment="Center"/>
+                                                                                    <!-- Static now — filtering the whole folder by thumbnail
+                                                                                         similarity moved to the folder's own "Filter all results
+                                                                                         by:" row (Thumb button there), since that behavior always
+                                                                                         acted at folder scope, never per-Set, and this column has
+                                                                                         no bound value to sort a single Set by anyway. -->
+                                                                                    <TextBlock Text="Thumb" FontWeight="Bold" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"/>
                                                                                     <Thumb Style="{StaticResource ColumnResizeThumb}" HorizontalAlignment="Right"
                                                                                            DragDelta="ThumbnailResizeThumb_DragDelta"/>
                                                                                 </Grid>
@@ -330,6 +563,11 @@
                                                                     </DataGridTemplateColumn>
 
                                                                     <DataGridTemplateColumn Header="File" Width="2*">
+                                                                        <DataGridTemplateColumn.HeaderStyle>
+                                                                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                                                                <Setter Property="ToolTip" Value="Click to sort by file name"/>
+                                                                            </Style>
+                                                                        </DataGridTemplateColumn.HeaderStyle>
                                                                         <DataGridTemplateColumn.CellTemplate>
                                                                             <DataTemplate>
                                                                                 <StackPanel VerticalAlignment="Center" Margin="4,0">
@@ -339,13 +577,55 @@
                                                                             </DataTemplate>
                                                                         </DataGridTemplateColumn.CellTemplate>
                                                                     </DataGridTemplateColumn>
-                                                                    <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" Width="80" IsReadOnly="True"/>
-                                                                    <DataGridTextColumn Header="Length" Binding="{Binding DurationDisplay}" Width="60" IsReadOnly="True"/>
-                                                                    <DataGridTextColumn Header="Resolution" Binding="{Binding ResolutionDisplay}" Width="90" IsReadOnly="True"/>
-                                                                    <DataGridTextColumn Header="Bit rate" Binding="{Binding BitRateDisplay}" Width="80" IsReadOnly="True"/>
-                                                                    <DataGridTextColumn Header="Audio" Binding="{Binding AudioDisplay}" Width="80" IsReadOnly="True"/>
-                                                                    <DataGridTextColumn Header="Match" Binding="{Binding MatchDisplay}" Width="70" IsReadOnly="True"/>
-                                                                    <DataGridTextColumn Header="Hash" Binding="{Binding HashHex}" Width="110" IsReadOnly="True"/>
+                                                                    <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" Width="80" IsReadOnly="True">
+                                                                        <DataGridTextColumn.HeaderStyle>
+                                                                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                                                                <Setter Property="ToolTip" Value="Click to sort by file size"/>
+                                                                            </Style>
+                                                                        </DataGridTextColumn.HeaderStyle>
+                                                                    </DataGridTextColumn>
+                                                                    <DataGridTextColumn Header="Length" Binding="{Binding DurationDisplay}" Width="60" IsReadOnly="True">
+                                                                        <DataGridTextColumn.HeaderStyle>
+                                                                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                                                                <Setter Property="ToolTip" Value="Click to sort by duration"/>
+                                                                            </Style>
+                                                                        </DataGridTextColumn.HeaderStyle>
+                                                                    </DataGridTextColumn>
+                                                                    <DataGridTextColumn Header="Resolution" Binding="{Binding ResolutionDisplay}" Width="90" IsReadOnly="True">
+                                                                        <DataGridTextColumn.HeaderStyle>
+                                                                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                                                                <Setter Property="ToolTip" Value="Click to sort by resolution"/>
+                                                                            </Style>
+                                                                        </DataGridTextColumn.HeaderStyle>
+                                                                    </DataGridTextColumn>
+                                                                    <DataGridTextColumn Header="Bit rate" Binding="{Binding BitRateDisplay}" Width="80" IsReadOnly="True">
+                                                                        <DataGridTextColumn.HeaderStyle>
+                                                                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                                                                <Setter Property="ToolTip" Value="Click to sort by bit rate"/>
+                                                                            </Style>
+                                                                        </DataGridTextColumn.HeaderStyle>
+                                                                    </DataGridTextColumn>
+                                                                    <DataGridTextColumn Header="Audio" Binding="{Binding AudioDisplay}" Width="80" IsReadOnly="True">
+                                                                        <DataGridTextColumn.HeaderStyle>
+                                                                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                                                                <Setter Property="ToolTip" Value="Click to sort by audio sample rate"/>
+                                                                            </Style>
+                                                                        </DataGridTextColumn.HeaderStyle>
+                                                                    </DataGridTextColumn>
+                                                                    <DataGridTextColumn Header="Match" Binding="{Binding MatchDisplay}" Width="70" IsReadOnly="True">
+                                                                        <DataGridTextColumn.HeaderStyle>
+                                                                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                                                                <Setter Property="ToolTip" Value="Click to sort by match %"/>
+                                                                            </Style>
+                                                                        </DataGridTextColumn.HeaderStyle>
+                                                                    </DataGridTextColumn>
+                                                                    <DataGridTextColumn Header="Hash" Binding="{Binding HashHex}" Width="110" IsReadOnly="True">
+                                                                        <DataGridTextColumn.HeaderStyle>
+                                                                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                                                                <Setter Property="ToolTip" Value="Click to sort by hash"/>
+                                                                            </Style>
+                                                                        </DataGridTextColumn.HeaderStyle>
+                                                                    </DataGridTextColumn>
                                                                 </DataGrid.Columns>
                                                             </DataGrid>
                                                         </StackPanel>
@@ -461,6 +741,40 @@
                                 Command="{Binding AddFolderCommand}"/>
                     </Border>
                 </Grid>
+            </Border>
+        </Border>
+
+        <!-- "Thinking" overlay: generic — shown while IsProcessing is true, for any slow
+             filter/results action (today: the thumbnail-similarity sort, since ORB
+             matching can take a moment). No click-to-close — it clears itself
+             automatically as soon as the action finishes. -->
+        <Border Grid.Row="0" Grid.RowSpan="5" Background="#B3000000"
+                Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}">
+            <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1"
+                    CornerRadius="10" Padding="26,20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                    <Ellipse Width="10" Height="10" Fill="{StaticResource AccentStrong}" VerticalAlignment="Center" Margin="0,0,10,0">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsProcessing}" Value="True">
+                                        <DataTrigger.EnterActions>
+                                            <BeginStoryboard x:Name="SortPulseStoryboard">
+                                                <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1.0" To="0.35" Duration="0:0:0.5"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </DataTrigger.EnterActions>
+                                        <DataTrigger.ExitActions>
+                                            <StopStoryboard BeginStoryboardName="SortPulseStoryboard"/>
+                                        </DataTrigger.ExitActions>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Ellipse.Style>
+                    </Ellipse>
+                    <TextBlock Text="{Binding ProcessingMessage}" FontWeight="Bold" Foreground="{StaticResource Text}" FontSize="13" VerticalAlignment="Center"/>
+                </StackPanel>
             </Border>
         </Border>
     </Grid>

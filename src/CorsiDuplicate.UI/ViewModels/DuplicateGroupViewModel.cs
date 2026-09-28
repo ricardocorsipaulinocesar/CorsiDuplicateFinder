@@ -21,7 +21,22 @@ public partial class DuplicateGroupViewModel : ObservableObject
     public ObservableCollection<MediaItemViewModel> Items { get; } = new();
 
     public int SetNumber { get; set; }
-    public string SetLabel => $"Set {SetNumber}";
+
+    // Overrides SetLabel for the synthetic, set-ignoring view built by the "Thumb"
+    // similarity sort — that view flattens every item of a folder into one list ordered
+    // purely by thumbnail similarity, so "Set N" would be misleading for it.
+    public string? CustomLabel { get; set; }
+    public string SetLabel => CustomLabel ?? $"Set {SetNumber}";
+
+    // Back-reference to the folder this set belongs to, set once by MainViewModel when
+    // the set is created — lets the "Thumb" header (bound to a single set's DataContext)
+    // reach the folder-wide sort state and trigger the folder-wide reorder command.
+    public FolderResultsViewModel? Owner { get; set; }
+
+    // The best-quality item's thumbnail stands in for the whole set when sorting sets by
+    // visual similarity, since it's the copy the user is most likely to keep and judge by.
+    public string? ReferenceThumbnailPath =>
+        Items.OrderByDescending(i => QualityScorer.Score(i.Model)).FirstOrDefault()?.ThumbnailPath;
 
     public DuplicateGroupViewModel(DuplicateGroup model, string folderPath, IEnumerable<MediaItemViewModel> items)
     {

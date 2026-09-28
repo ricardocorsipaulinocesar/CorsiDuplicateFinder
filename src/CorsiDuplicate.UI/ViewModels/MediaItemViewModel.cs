@@ -85,6 +85,11 @@ public partial class MediaItemViewModel : ObservableObject
     public string HashHex => Model.HashHex;
     public bool IsVideo => Model.Kind == MediaKind.Video;
 
+    // The exact generated thumbnail file (JPEG frame for a video, resized copy for a
+    // photo) already produced for display — used as the sole input for the "sort sets
+    // by thumbnail similarity" feature, per that feature's requirement.
+    public string ThumbnailPath => ThumbnailService.PathFor(Model);
+
     [RelayCommand]
     private void Play()
     {
