@@ -9,7 +9,10 @@ public partial class SelectionSummaryViewModel : ObservableObject
     private long _totalSelectedBytes;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelection))]
     private int _selectedCount;
+
+    public bool HasSelection => SelectedCount > 0;
 
     public string TotalSelectedDisplay => MediaItemViewModel.FormatBytes(TotalSelectedBytes);
 

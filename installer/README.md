@@ -32,4 +32,12 @@ then open `installer\CorsiDuplicateFinder.iss` in the Inno Setup Compiler and Bu
 (`Ctrl+F9`), or run `ISCC.exe installer\CorsiDuplicateFinder.iss` — this fallback path defaults
 to `..\publish-installer` when no `/DMyPublishDir` override is given.
 
+## Version number
+
+`src/CorsiDuplicate.UI/version.txt` is the single source of the version (status bar, exe,
+installer, Windows "Installed apps"). It holds the version the next installer publish will
+carry; after each successful installer build the last number is bumped automatically
+(1.0.0.0 → 1.0.0.1 …). Commit the updated `version.txt` after publishing. Edit the first three
+numbers by hand for a bigger release.
+
 ffmpeg isn't bundled: the app downloads it into `%LocalAppData%` on first run.

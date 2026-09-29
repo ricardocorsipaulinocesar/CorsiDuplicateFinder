@@ -121,6 +121,8 @@ public partial class MainViewModel : ObservableObject
 
     public bool HasAnyResults => FolderResults.Count > 0;
 
+    public string AppVersion { get; } = $"v{typeof(MainViewModel).Assembly.GetName().Version}";
+
     public MainViewModel()
     {
         _grouper = new HammingClusterGrouper(new HsvHistogramComparer(), _structuralMatcher);

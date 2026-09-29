@@ -8,7 +8,9 @@
 ;   Output lands in installer\Output\CorsiDuplicateFinderSetup.exe
 
 #define MyAppName "CorsiDuplicate Finder"
-#define MyAppVersion "1.0.0"
+#ifndef MyAppVersion
+  #define MyAppVersion "1.0.0.0"
+#endif
 #define MyAppPublisher "Ricardo Corsi Paulino Cesar"
 #define MyAppExeName "CorsiDuplicate.UI.exe"
 
@@ -25,6 +27,7 @@
 AppId={{E6C9C6A5-3E0E-4C1B-9C5A-6B2C1E2C6A11}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+VersionInfoVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}

@@ -22,6 +22,16 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <!-- Single source of the app version: shown in the status bar, stamped on the exe and
+       passed to the installer. version.txt holds the version the NEXT installer publish
+       will carry; BuildInstaller bumps its last number after each successful installer. -->
+  <PropertyGroup>
+    <_VersionFile>$(MSBuildThisFileDirectory)version.txt</_VersionFile>
+    <Version>$([System.IO.File]::ReadAllText('$(_VersionFile)').Trim())</Version>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+  </PropertyGroup>
+
   <!-- Builds installer\Output\CorsiDuplicateFinderSetup.exe right after a self-contained
        win-x64 Release publish, the same publish that "Publish" in Visual Studio's own
        Publish dialog produces when its profile is set to win-x64, self-contained, Release
@@ -40,9 +50,13 @@
     <Warning Condition="'$(_InnoSetupCompiler)' == ''"
              Text="Inno Setup isn't installed (or not in the usual location) — skipping the installer build. Install it from https://jrsoftware.org/isdl.php or 'winget install JRSoftware.InnoSetup', then publish again." />
     <Exec Condition="'$(_InnoSetupCompiler)' != ''"
-          Command="&quot;$(_InnoSetupCompiler)&quot; /DMyPublishDir=&quot;$(_ResolvedPublishDir)&quot; &quot;$(_InstallerScript)&quot;" />
+          Command="&quot;$(_InnoSetupCompiler)&quot; /DMyPublishDir=&quot;$(_ResolvedPublishDir)&quot; /DMyAppVersion=&quot;$(Version)&quot; &quot;$(_InstallerScript)&quot;" />
+    <PropertyGroup Condition="'$(_InnoSetupCompiler)' != ''">
+      <_NextVersion>$([System.Version]::Parse('$(Version)').Major).$([System.Version]::Parse('$(Version)').Minor).$([System.Version]::Parse('$(Version)').Build).$([MSBuild]::Add($([System.Version]::Parse('$(Version)').Revision), 1))</_NextVersion>
+    </PropertyGroup>
+    <WriteLinesToFile Condition="'$(_InnoSetupCompiler)' != ''" File="$(_VersionFile)" Lines="$(_NextVersion)" Overwrite="true" />
     <Message Condition="'$(_InnoSetupCompiler)' != ''" Importance="high"
-             Text="Installer built: installer\Output\CorsiDuplicateFinderSetup.exe" />
+             Text="Installer built: installer\Output\CorsiDuplicateFinderSetup.exe (v$(Version)); next publish will be v$(_NextVersion) — commit version.txt" />
   </Target>
 
 </Project>

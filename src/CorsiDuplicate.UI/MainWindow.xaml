@@ -163,6 +163,10 @@
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="HoverOverlay" Property="Background" Value="#33FFFFFF"/>
                             </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bg" Property="Opacity" Value="0.4"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -187,6 +191,16 @@
             <Setter Property="Background" Value="{StaticResource Surface}"/>
             <Setter Property="Foreground" Value="{StaticResource Danger}"/>
             <Setter Property="BorderBrush" Value="#59EA6F64"/>
+        </Style>
+        <Style TargetType="Button" x:Key="PillPrimary" BasedOn="{StaticResource Pill}">
+            <Setter Property="Background" Value="{StaticResource Accent}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Accent}"/>
+        </Style>
+        <Style TargetType="Button" x:Key="PillDelete" BasedOn="{StaticResource Pill}">
+            <Setter Property="Background" Value="{StaticResource Danger}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Danger}"/>
         </Style>
 
         <!-- One small link per field in a folder's "Filter all results by:" row — same
@@ -275,9 +289,9 @@
         <!-- Toolbar -->
         <Border Grid.Row="0" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="16,10">
             <StackPanel Orientation="Horizontal">
-                <Button Content="Scan folders" Style="{StaticResource PrimaryButton}"
+                <Button Content="Scan folders" Style="{StaticResource PillPrimary}"
                         Command="{Binding ScanCommand}" IsEnabled="{Binding IsScanning, Converter={StaticResource InverseBool}}"/>
-                <Button Content="Stop scan" Style="{StaticResource DangerButton}" Margin="8,0,0,0"
+                <Button Content="Stop scan" Style="{StaticResource PillDanger}" Margin="8,0,0,0"
                         Command="{Binding StopScanCommand}" IsEnabled="{Binding IsScanning}"/>
                 <Border Width="1" Background="{StaticResource Border}" Margin="10,2"/>
 
@@ -328,7 +342,10 @@
                      app visibly reads as "working" instead of looking identical to any
                      other status message; reverts to the normal muted style once
                      finished/stopped. -->
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0">
+                <Border Background="{StaticResource SurfaceAlt}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="6" Padding="12,5" MinWidth="320">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="STATUS" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <StackPanel.Style>
                         <Style TargetType="StackPanel">
                             <Style.Triggers>
@@ -364,10 +381,9 @@
                             </Style>
                         </TextBlock.Style>
                     </TextBlock>
+                    </StackPanel>
                 </StackPanel>
-
-                <Button Content="Delete selected" Style="{StaticResource DangerButton}" HorizontalAlignment="Right"
-                        Command="{Binding DeleteSelectedCommand}" Margin="16,0,0,0"/>
+                </Border>
             </StackPanel>
         </Border>
 
@@ -382,22 +398,26 @@
             <StackPanel>
                 <Border Background="{StaticResource SurfaceAlt}" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="16,8">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="MANAGED FOLDERS" FontSize="10.5" FontWeight="Bold" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"/>
-                        <Border Background="{StaticResource AccentSoft}" CornerRadius="10" Padding="7,1" Margin="8,0">
-                            <TextBlock Text="{Binding FolderManager.Folders.Count}" FontSize="10" FontWeight="Bold" Foreground="{StaticResource AccentStrong}"/>
+                        <TextBlock Text="FOLDERS" FontSize="10.5" FontWeight="Bold" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"/>
+                        <Border Background="{StaticResource AccentSoft}" BorderBrush="#736690F2" BorderThickness="1"
+                                CornerRadius="15" Padding="14,7" MinWidth="44" Margin="8,0,0,0">
+                            <TextBlock Text="{Binding FolderManager.Folders.Count}" FontSize="12" FontWeight="Bold"
+                                       Foreground="{StaticResource AccentStrong}" HorizontalAlignment="Center"/>
                         </Border>
-                        <Button Content="+ Add folder" Style="{StaticResource ToolButton}" Padding="8,3"
+                        <Button Content="+ Add folder" Style="{StaticResource PillNeutral}"
                                 Command="{Binding AddFolderCommand}" Margin="8,0,0,0"
                                 ToolTip="Select one or more folders to add at once"/>
-                        <Button Content="Hide/Show" Style="{StaticResource ToolButton}" Padding="8,3"
+                        <Button Content="Hide/Show" Style="{StaticResource PillNeutral}"
                                 Command="{Binding FolderManager.ToggleManageFoldersCommand}" Margin="6,0,0,0"
                                 ToolTip="Open the full-screen managed-folders list"/>
 
                         <Border Width="1" Background="{StaticResource Border}" Margin="10,2" Height="20"/>
-                        <Button Content="High quality (all)" Style="{StaticResource PillHq}"
+                        <TextBlock Text="QUALITY" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMuted}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <Button Content="High" Style="{StaticResource PillHq}"
                                 Command="{Binding ApplyHighQualityToAllCommand}"
                                 ToolTip="In every duplicate set across every folder, keep only the best copy unchecked"/>
-                        <Button Content="Low quality (all)" Style="{StaticResource PillLq}" Margin="6,0,0,0"
+                        <Button Content="Low" Style="{StaticResource PillLq}" Margin="6,0,0,0"
                                 Command="{Binding ApplyLowQualityToAllCommand}"
                                 ToolTip="In every duplicate set across every folder, keep only the worst copy unchecked"/>
 
@@ -477,6 +497,12 @@
                                 </Border>
                             </Popup>
                         </Grid>
+
+                        <Border Width="1" Background="{StaticResource Border}" Margin="10,2" Height="20"/>
+                        <Button Content="Delete" Style="{StaticResource PillDelete}"
+                                Command="{Binding DeleteSelectedCommand}"
+                                IsEnabled="{Binding Selection.HasSelection}"
+                                ToolTip="Move every checked file to the Recycle Bin"/>
                     </StackPanel>
                 </Border>
             </StackPanel>
@@ -881,6 +907,9 @@
                 <TextBlock Text=" total size" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Bottom" Margin="4,0,0,1"/>
             </StackPanel>
         </Border>
+        <TextBlock Grid.Row="4" Text="{Binding AppVersion}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                   Margin="0,0,16,0" FontSize="10.5" Opacity="0.75" Foreground="{StaticResource TextMuted}"
+                   ToolTip="App version"/>
 
         <!-- Managed folders: full-screen overlay. Covers every row so it sits above the
              whole window; clicking the dark backdrop closes it, clicking the sheet itself
