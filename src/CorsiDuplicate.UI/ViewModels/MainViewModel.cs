@@ -165,7 +165,9 @@ public partial class MainViewModel : ObservableObject
 
         ThumbnailsPerVideo = value;
         MediaItemViewModel.ThumbnailsPerVideo = value;
-        _appSettingsStore.Save(new AppSettings { ThumbnailsPerVideo = value });
+        var settings = _appSettingsStore.Load();
+        settings.ThumbnailsPerVideo = value;
+        _appSettingsStore.Save(settings);
 
         foreach (var item in FolderResults.SelectMany(f => f.Groups).SelectMany(g => g.Items).Where(i => i.IsVideo))
         {

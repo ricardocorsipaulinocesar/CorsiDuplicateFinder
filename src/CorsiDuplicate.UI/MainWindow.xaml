@@ -953,6 +953,19 @@
                                 <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
                                 <Setter Property="Background" Value="{StaticResource SurfaceAlt}"/>
                             </Style>
+                            <Style x:Key="SortableFolderHeader" TargetType="{x:Type GridViewColumnHeader}"
+                                   BasedOn="{StaticResource {x:Type GridViewColumnHeader}}">
+                                <Setter Property="Foreground" Value="{StaticResource Text}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                                <Setter Property="Padding" Value="8,4"/>
+                                <Setter Property="Cursor" Value="Hand"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
                         </ListView.Resources>
                         <ListView.View>
                             <GridView>
@@ -963,9 +976,41 @@
                                         </DataTemplate>
                                     </GridViewColumn.CellTemplate>
                                 </GridViewColumn>
-                                <GridViewColumn Header="Folder path" Width="560" DisplayMemberBinding="{Binding Path}"/>
-                                <GridViewColumn Header="Last scanned" Width="150" DisplayMemberBinding="{Binding LastScannedDisplay}"/>
-                                <GridViewColumn Header="Items" Width="100" DisplayMemberBinding="{Binding ItemCountDisplay}"/>
+                                <GridViewColumn Width="460" DisplayMemberBinding="{Binding Path}">
+                                    <GridViewColumnHeader Content="{Binding FolderManager.PathHeader}" Style="{StaticResource SortableFolderHeader}"
+                                                          Command="{Binding FolderManager.SortByCommand}" CommandParameter="Path"
+                                                          ToolTip="Click to sort by folder path"/>
+                                </GridViewColumn>
+                                <GridViewColumn Width="300">
+                                    <GridViewColumnHeader Content="{Binding FolderManager.LastModifiedHeader}" Style="{StaticResource SortableFolderHeader}"
+                                                          Command="{Binding FolderManager.SortByCommand}" CommandParameter="LastModified"
+                                                          ToolTip="Click to sort by the most recent change inside each folder"/>
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding LastModifiedDisplay}"/>
+                                                <TextBlock Text="{Binding LastModifiedRelative}" Foreground="{StaticResource TextMuted}"
+                                                           FontSize="11" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                <Border Background="#3A3020" BorderBrush="#66E8B34B" BorderThickness="1" CornerRadius="9"
+                                                        Padding="8,0" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                        ToolTip="Modified after the last scan — scan again to pick up the changes"
+                                                        Visibility="{Binding IsChangedSinceScan, Converter={StaticResource BoolToVis}}">
+                                                    <TextBlock Text="changed since scan" FontSize="10.5" FontWeight="Bold" Foreground="#E8B34B"/>
+                                                </Border>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Width="150" DisplayMemberBinding="{Binding LastScannedDisplay}">
+                                    <GridViewColumnHeader Content="{Binding FolderManager.LastScannedHeader}" Style="{StaticResource SortableFolderHeader}"
+                                                          Command="{Binding FolderManager.SortByCommand}" CommandParameter="LastScanned"
+                                                          ToolTip="Click to sort by last scan time"/>
+                                </GridViewColumn>
+                                <GridViewColumn Width="100" DisplayMemberBinding="{Binding ItemCountDisplay}">
+                                    <GridViewColumnHeader Content="{Binding FolderManager.ItemsHeader}" Style="{StaticResource SortableFolderHeader}"
+                                                          Command="{Binding FolderManager.SortByCommand}" CommandParameter="Items"
+                                                          ToolTip="Click to sort by number of files"/>
+                                </GridViewColumn>
                                 <GridViewColumn Header="" Width="80">
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>
