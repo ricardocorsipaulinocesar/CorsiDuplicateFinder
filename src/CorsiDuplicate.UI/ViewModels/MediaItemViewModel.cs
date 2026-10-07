@@ -42,6 +42,37 @@ public partial class MediaItemViewModel : ObservableObject
     [ObservableProperty]
     private string? _hashGroupColor;
 
+    // Filled only while the folder's "Contained" view is active: where this clip sits inside
+    // its source video (or, for the source itself, a short description), plus the bar
+    // geometry for the position indicator, in pixels of ContainmentBarTrackWidth.
+    public const double ContainmentBarTrackWidth = 220;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasContainmentNote))]
+    private string? _containmentNote;
+
+    public bool HasContainmentNote => ContainmentNote is not null;
+
+    [ObservableProperty]
+    private bool _isContainedClip;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ContainmentBarMargin))]
+    private double _containmentBarOffset;
+
+    public System.Windows.Thickness ContainmentBarMargin => new(ContainmentBarOffset, 0, 0, 0);
+
+    [ObservableProperty]
+    private double _containmentBarWidth;
+
+    public void ClearContainment()
+    {
+        ContainmentNote = null;
+        IsContainedClip = false;
+        ContainmentBarOffset = 0;
+        ContainmentBarWidth = 0;
+    }
+
     public ObservableCollection<BitmapImage> Thumbnails { get; } = new();
 
     partial void OnIsSelectedChanged(bool value) => SelectionChanged?.Invoke(this);

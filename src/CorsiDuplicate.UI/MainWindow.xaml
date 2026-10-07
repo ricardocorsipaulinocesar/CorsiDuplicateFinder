@@ -677,6 +677,20 @@
                                                     </Style>
                                                 </Button.Style>
                                             </Button>
+                                            <Border Width="1" Height="16" Background="{StaticResource Border}" Margin="6,0" VerticalAlignment="Center"/>
+                                            <Button Content="&#10697; Contained" Tag="Contained" Click="FolderFilter_Click"
+                                                    ToolTip="Find videos in this folder that are an excerpt of another, longer video (click again to go back)">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
+                                                        <Setter Property="Foreground" Value="#B89AF5"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Contained">
+                                                                <Setter Property="Background" Value="#2E2645"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
                                         </StackPanel>
                                     </Border>
 
@@ -814,6 +828,15 @@
                                                                                 <StackPanel VerticalAlignment="Center" Margin="4,0">
                                                                                     <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="12"/>
                                                                                     <TextBlock Text="{Binding FolderPath}" FontSize="10" Foreground="{StaticResource TextMuted}"/>
+                                                                                    <TextBlock Text="{Binding ContainmentNote}" FontSize="11" FontWeight="SemiBold" Margin="0,3,0,0"
+                                                                                               Foreground="#B89AF5" TextWrapping="Wrap"
+                                                                                               Visibility="{Binding HasContainmentNote, Converter={StaticResource BoolToVis}}"/>
+                                                                                    <Border Width="220" Height="6" CornerRadius="3" Background="{StaticResource Border}"
+                                                                                            HorizontalAlignment="Left" Margin="0,5,0,0"
+                                                                                            Visibility="{Binding IsContainedClip, Converter={StaticResource BoolToVis}}">
+                                                                                        <Border Background="#B89AF5" CornerRadius="3" HorizontalAlignment="Left"
+                                                                                                Width="{Binding ContainmentBarWidth}" Margin="{Binding ContainmentBarMargin}"/>
+                                                                                    </Border>
                                                                                 </StackPanel>
                                                                             </DataTemplate>
                                                                         </DataGridTemplateColumn.CellTemplate>
@@ -1063,6 +1086,9 @@
                         </Ellipse.Style>
                     </Ellipse>
                     <TextBlock Text="{Binding ProcessingMessage}" FontWeight="Bold" Foreground="{StaticResource Text}" FontSize="13" VerticalAlignment="Center"/>
+                    <Button Content="Cancel" Style="{StaticResource PillDanger}" Margin="18,0,0,0" VerticalAlignment="Center"
+                            Command="{Binding CancelProcessingCommand}"
+                            Visibility="{Binding IsProcessingCancellable, Converter={StaticResource BoolToVis}}"/>
                 </StackPanel>
             </Border>
         </Border>

@@ -7,10 +7,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CorsiDuplicate.Core.Abstractions;
 using CorsiDuplicate.Core.Grouping;
+using CorsiDuplicate.Core.Matching;
 using CorsiDuplicate.Core.Models;
 using CorsiDuplicate.Infrastructure.IO;
 using CorsiDuplicate.Infrastructure.Logging;
 using CorsiDuplicate.Infrastructure.Matching;
+using CorsiDuplicate.Infrastructure.Media;
 using CorsiDuplicate.Infrastructure.Persistence;
 using CorsiDuplicate.Infrastructure.Scanning;
 using Microsoft.Win32;
@@ -113,6 +115,14 @@ public partial class MainViewModel : ObservableObject
 
     private readonly List<Task> _pendingThumbnailTasks = new();
 
+    // "Contained" folder filter: whole-video fingerprints (cached on disk) and the way to
+    // cancel the analysis from the processing modal, the only cancellable action there.
+    private readonly VideoFingerprintCache _fingerprintCache = new();
+    private CancellationTokenSource? _processingCts;
+
+    [ObservableProperty]
+    private bool _isProcessingCancellable;
+
     private readonly AppSettingsStore _appSettingsStore = new();
 
     [ObservableProperty]
@@ -189,7 +199,7 @@ public partial class MainViewModel : ObservableObject
         if (folderVm is not null)
         {
             FolderResults.Remove(folderVm);
-            Selection.Recompute(FolderResults.SelectMany(f => f.Groups).SelectMany(g => g.Items));
+            Selection.Recompute(FolderResults.SelectMany(f => f.Groups).SelectMany(g => g.Items).Distinct());
             OnPropertyChanged(nameof(HasAnyResults));
         }
 
@@ -304,7 +314,19 @@ public partial class MainViewModel : ObservableObject
 
         if (folder.ActiveFolderFilter == key)
         {
-            folder.RestoreOriginalGroupOrder();
+            RestoreFolderView(folder);
+            return;
+        }
+
+        if (folder.ActiveFolderFilter == ContainedFilterKey)
+        {
+            // Other filters re-sort the Sets' items; leave the clip-only view first.
+            RestoreFolderView(folder);
+        }
+
+        if (key == ContainedFilterKey)
+        {
+            await ShowContainedVideosAsync(folder);
             return;
         }
 
@@ -350,6 +372,169 @@ public partial class MainViewModel : ObservableObject
         };
         folder.ApplyFlattenedOrder(new List<DuplicateGroupViewModel> { flatGroup }, key);
     }
+
+    public const string ContainedFilterKey = "Contained";
+
+    private void RestoreFolderView(FolderResultsViewModel folder)
+    {
+        foreach (var item in folder.Groups.SelectMany(g => g.Items))
+        {
+            item.ClearContainment();
+        }
+        folder.RestoreOriginalGroupOrder();
+        Selection.Recompute(FolderResults.SelectMany(f => f.Groups).SelectMany(g => g.Items).Distinct());
+    }
+
+    [RelayCommand]
+    private void CancelProcessing() => _processingCts?.Cancel();
+
+    /// <summary>
+    /// "Contained" filter: fingerprints every video scanned in this folder (not only those
+    /// already in a duplicate Set — an excerpt usually isn't in any), then shows one Set per
+    /// source video with the clips found inside it and where.
+    /// </summary>
+    private async Task ShowContainedVideosAsync(FolderResultsViewModel folder)
+    {
+        if (!_scannedItemsByFolder.TryGetValue(folder.Path, out var scanned))
+        {
+            return;
+        }
+
+        var videos = scanned.Where(i => i.Kind == MediaKind.Video).ToList();
+        if (videos.Count < 2)
+        {
+            StatusMessage = "Contained: this folder needs at least two videos.";
+            return;
+        }
+
+        _processingCts = new CancellationTokenSource();
+        var ct = _processingCts.Token;
+        IsProcessingCancellable = true;
+        IsProcessing = true;
+        List<(MediaItem Clip, MediaItem Source, int SourceSeconds, ContainmentMatch Match)> matches;
+        try
+        {
+            var fingerprints = new Dictionary<MediaItem, VideoFingerprint>();
+            for (var i = 0; i < videos.Count; i++)
+            {
+                var video = videos[i];
+                ProcessingMessage = _fingerprintCache.Contains(video)
+                    ? $"Analyzing videos {i + 1}/{videos.Count}..."
+                    : $"Analyzing videos {i + 1}/{videos.Count}... reading {video.FileName}";
+                try
+                {
+                    if (await _fingerprintCache.GetOrCreateAsync(video, ct) is { } fingerprint)
+                    {
+                        fingerprints[video] = fingerprint;
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    AppLogger.Error(nameof(MainViewModel), nameof(ShowContainedVideosAsync),
+                        $"Could not fingerprint '{video.FullPath}'.", ex);
+                }
+            }
+
+            ProcessingMessage = "Comparing videos...";
+            matches = await Task.Run(() => FindContainedVideos(fingerprints, ct), ct);
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "Contained analysis cancelled.";
+            return;
+        }
+        finally
+        {
+            IsProcessing = false;
+            IsProcessingCancellable = false;
+            _processingCts.Dispose();
+            _processingCts = null;
+        }
+
+        if (matches.Count == 0)
+        {
+            StatusMessage = $"No contained videos found in {FolderDisplayName(folder.Path)}.";
+            return;
+        }
+
+        var existing = folder.Groups.SelectMany(g => g.Items)
+            .GroupBy(i => i.Model.FullPath, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        MediaItemViewModel VmFor(MediaItem item) =>
+            existing.TryGetValue(item.FullPath, out var vm) ? vm : existing[item.FullPath] = CreateItemViewModel(item, folder.Path);
+
+        var groups = new List<DuplicateGroupViewModel>();
+        var setNumber = 1;
+        foreach (var bySource in matches.GroupBy(m => m.Source).OrderByDescending(g => g.Count()))
+        {
+            var sourceVm = VmFor(bySource.Key);
+            var clipCount = bySource.Count();
+            sourceVm.ContainmentNote = $"Source video · contains {clipCount} clip{(clipCount == 1 ? "" : "s")}";
+
+            var rows = new List<MediaItemViewModel> { sourceVm };
+            foreach (var (clip, _, sourceSeconds, match) in bySource.OrderBy(m => m.Match.StartSeconds))
+            {
+                var clipVm = VmFor(clip);
+                clipVm.IsContainedClip = true;
+                clipVm.ContainmentNote =
+                    $"Contained at {FormatSeconds(match.StartSeconds)}–{FormatSeconds(match.EndSeconds)} · {match.CoveragePercent:0}% of frames match";
+                var track = MediaItemViewModel.ContainmentBarTrackWidth;
+                clipVm.ContainmentBarOffset = track * match.StartSeconds / sourceSeconds;
+                clipVm.ContainmentBarWidth = Math.Max(3, track * (match.EndSeconds - match.StartSeconds) / sourceSeconds);
+                rows.Add(clipVm);
+            }
+
+            groups.Add(new DuplicateGroupViewModel(new DuplicateGroup(), folder.Path, rows)
+            {
+                SetNumber = setNumber++,
+                CustomLabel = $"{bySource.Key.FileName} — contains {clipCount} clip{(clipCount == 1 ? "" : "s")}",
+                Owner = folder,
+            });
+        }
+
+        folder.ApplyFlattenedOrder(groups, ContainedFilterKey);
+        Selection.Recompute(FolderResults.SelectMany(f => f.Groups).SelectMany(g => g.Items).Distinct());
+        StatusMessage = $"Contained: {matches.Count} clip(s) found inside {groups.Count} video(s).";
+    }
+
+    /// <summary>Each video is tested against every longer video; a clip found in several
+    /// (e.g. the source and a duplicate copy of it) is shown under its best match.</summary>
+    private static List<(MediaItem Clip, MediaItem Source, int SourceSeconds, ContainmentMatch Match)> FindContainedVideos(
+        Dictionary<MediaItem, VideoFingerprint> fingerprints, CancellationToken ct)
+    {
+        var ordered = fingerprints.OrderBy(kv => kv.Value.Length).ToList();
+        var results = new List<(MediaItem, MediaItem, int, ContainmentMatch)>();
+        var gate = new object();
+
+        Parallel.For(0, ordered.Count, new ParallelOptions { CancellationToken = ct }, i =>
+        {
+            var (clip, clipFp) = ordered[i];
+            (MediaItem Source, int Seconds, ContainmentMatch Match)? best = null;
+            for (var j = i + 1; j < ordered.Count; j++)
+            {
+                ct.ThrowIfCancellationRequested();
+                var (source, sourceFp) = ordered[j];
+                if (ContainmentMatcher.Find(clipFp, sourceFp) is { } match
+                    && (best is null || match.CoveragePercent > best.Value.Match.CoveragePercent))
+                {
+                    best = (source, sourceFp.Length, match);
+                }
+            }
+
+            if (best is { } b)
+            {
+                lock (gate)
+                {
+                    results.Add((clip, b.Source, b.Seconds, b.Match));
+                }
+            }
+        });
+
+        return results;
+    }
+
+    private static string FormatSeconds(int seconds) =>
+        seconds >= 3600 ? TimeSpan.FromSeconds(seconds).ToString(@"h\:mm\:ss") : TimeSpan.FromSeconds(seconds).ToString(@"m\:ss");
 
     /// <summary>Plain, synchronous comparison for every folder-wide filter except "Thumb".</summary>
     private static List<MediaItemViewModel> OrderItemsByField(List<MediaItemViewModel> items, string key) => key switch
@@ -600,6 +785,7 @@ public partial class MainViewModel : ObservableObject
         var existingByPath = FolderResults
             .SelectMany(f => f.Groups)
             .SelectMany(g => g.Items)
+            .DistinctBy(i => i.Model.FullPath)
             .ToDictionary(i => i.Model.FullPath);
 
         var snapshot = _scannedItemsByFolder
@@ -642,6 +828,13 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        // Reused item view models must not carry a previous "Contained" view's notes into
+        // the freshly grouped Sets.
+        foreach (var item in existingByPath.Values)
+        {
+            item.ClearContainment();
+        }
+
         FolderResults.Clear();
 
         foreach (var (folderPath, groups, itemCount) in perFolder)
@@ -674,7 +867,7 @@ public partial class MainViewModel : ObservableObject
             FolderResults.Add(folderVm);
         }
 
-        Selection.Recompute(FolderResults.SelectMany(f => f.Groups).SelectMany(g => g.Items));
+        Selection.Recompute(FolderResults.SelectMany(f => f.Groups).SelectMany(g => g.Items).Distinct());
         OnPropertyChanged(nameof(HasAnyResults));
     }
 
@@ -735,7 +928,8 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task DeleteSelectedAsync()
     {
-        var allItems = FolderResults.SelectMany(f => f.Groups).SelectMany(g => g.Items).ToList();
+        // Distinct: in the "Contained" view one video can be both a clip and a source row.
+        var allItems = FolderResults.SelectMany(f => f.Groups).SelectMany(g => g.Items).Distinct().ToList();
         var selected = allItems.Where(i => i.IsSelected).ToList();
         if (selected.Count == 0)
         {
@@ -807,7 +1001,7 @@ public partial class MainViewModel : ObservableObject
 
         // Recomputed from whatever remains in the tree (rather than just zeroed), so any
         // items that failed to delete and are still checked keep counting correctly.
-        Selection.Recompute(FolderResults.SelectMany(f => f.Groups).SelectMany(g => g.Items));
+        Selection.Recompute(FolderResults.SelectMany(f => f.Groups).SelectMany(g => g.Items).Distinct());
         OnPropertyChanged(nameof(HasAnyResults));
 
         if (failures.Count == 0)

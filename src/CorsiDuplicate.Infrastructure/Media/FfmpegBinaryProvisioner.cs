@@ -38,8 +38,11 @@ public static class FfmpegBinaryProvisioner
 
             if (!hasFfmpeg || !hasFfprobe)
             {
+                // The path argument matters: without it the downloader writes into the
+                // process's current directory, not binaryFolder, so the binaries were never
+                // found here and got re-downloaded on every launch.
                 Xabe.FFmpeg.FFmpeg.SetExecutablesPath(binaryFolder);
-                await FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official);
+                await FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official, binaryFolder);
             }
 
             GlobalFFOptions.Configure(new FFOptions { BinaryFolder = binaryFolder, TemporaryFilesFolder = Path.GetTempPath() });
