@@ -154,6 +154,8 @@ public partial class MainViewModel : ObservableObject
 
     public string AppVersion { get; } = $"v{typeof(MainViewModel).Assembly.GetName().Version}";
 
+    public string WindowTitle => $"Duplicate Finder {AppVersion}";
+
     public MainViewModel()
     {
         _grouper = new HammingClusterGrouper(new HsvHistogramComparer(), _structuralMatcher);
@@ -165,6 +167,7 @@ public partial class MainViewModel : ObservableObject
         };
 
         FolderManager.FolderRemoved += OnFolderRemoved;
+        FolderManager.StatusChanged += message => StatusMessage = message;
 
         var settings = _appSettingsStore.Load();
         ThumbnailsPerVideo = Math.Max(1, settings.ThumbnailsPerVideo);

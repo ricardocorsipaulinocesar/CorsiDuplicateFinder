@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -183,6 +184,113 @@ public partial class FolderManagerViewModel : ObservableObject
         AddAndTrack(new ManagedFolderViewModel(model));
         Persist();
         return true;
+    }
+
+    // "Add all subfolders": pick a parent folder, then choose which of its subfolders become
+    // separate entries in the list (each gets its own results and "Last modified").
+    [ObservableProperty]
+    private bool _isSubfolderPickerOpen;
+
+    [ObservableProperty]
+    private string _subfolderRoot = "";
+
+    [ObservableProperty]
+    private bool _includeDeeperLevels;
+
+    public ObservableCollection<SubfolderCandidate> SubfolderCandidates { get; } = new();
+
+    public int SubfoldersToAdd => SubfolderCandidates.Count(c => c.IsChecked && !c.IsAlreadyAdded);
+    public string SubfolderSummary => $"Found {SubfolderCandidates.Count} subfolder(s). Each one becomes its own folder in the list.";
+    public string AddSubfoldersLabel => SubfoldersToAdd == 1 ? "Add 1 folder" : $"Add {SubfoldersToAdd} folders";
+
+    /// <summary>Raised with a short status line after subfolders are added.</summary>
+    public event Action<string>? StatusChanged;
+
+    [RelayCommand]
+    private void AddSubfolders()
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "Select the parent folder" };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        SubfolderRoot = dialog.FolderName;
+        LoadSubfolderCandidates();
+        IsSubfolderPickerOpen = true;
+    }
+
+    partial void OnIncludeDeeperLevelsChanged(bool value)
+    {
+        if (IsSubfolderPickerOpen)
+        {
+            LoadSubfolderCandidates();
+        }
+    }
+
+    private void LoadSubfolderCandidates()
+    {
+        SubfolderCandidates.Clear();
+        IEnumerable<string> paths;
+        try
+        {
+            paths = Directory.EnumerateDirectories(SubfolderRoot, "*", new EnumerationOptions
+            {
+                RecurseSubdirectories = IncludeDeeperLevels,
+                IgnoreInaccessible = true,
+                AttributesToSkip = FileAttributes.Hidden | FileAttributes.System,
+            }).OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AppLogger.Info(nameof(FolderManagerViewModel), nameof(LoadSubfolderCandidates), $"Could not list '{SubfolderRoot}': {ex.Message}");
+            paths = Array.Empty<string>();
+        }
+
+        foreach (var path in paths)
+        {
+            var already = Folders.Any(f => string.Equals(f.Path, path, StringComparison.OrdinalIgnoreCase));
+            var candidate = new SubfolderCandidate(path, Path.GetRelativePath(SubfolderRoot, path), already);
+            candidate.PropertyChanged += (_, _) => RefreshSubfolderCounts();
+            SubfolderCandidates.Add(candidate);
+        }
+        RefreshSubfolderCounts();
+    }
+
+    private void RefreshSubfolderCounts()
+    {
+        OnPropertyChanged(nameof(SubfoldersToAdd));
+        OnPropertyChanged(nameof(SubfolderSummary));
+        OnPropertyChanged(nameof(AddSubfoldersLabel));
+        OnPropertyChanged(nameof(AllSubfoldersChecked));
+    }
+
+    public bool AllSubfoldersChecked
+    {
+        get => SubfolderCandidates.Where(c => !c.IsAlreadyAdded).All(c => c.IsChecked);
+        set
+        {
+            foreach (var c in SubfolderCandidates.Where(c => !c.IsAlreadyAdded))
+            {
+                c.IsChecked = value;
+            }
+        }
+    }
+
+    [RelayCommand]
+    private void ConfirmSubfolders()
+    {
+        var added = SubfolderCandidates.Where(c => c.IsChecked && !c.IsAlreadyAdded).Count(c => AddFolder(c.Path));
+        IsSubfolderPickerOpen = false;
+        SubfolderCandidates.Clear();
+        StatusChanged?.Invoke(added == 0 ? "No new subfolders were added." : $"Added {added} subfolder(s) of {SubfolderRoot}.");
+    }
+
+    [RelayCommand]
+    private void CancelSubfolders()
+    {
+        IsSubfolderPickerOpen = false;
+        SubfolderCandidates.Clear();
     }
 
     [RelayCommand]
