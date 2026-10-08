@@ -635,17 +635,21 @@ public partial class MainViewModel : ObservableObject
         {
             var clipCount = bySource.Count();
             var sourceSeconds = bySource.First().SourceSeconds;
+            var mainName = bySource.Key.FileName;
+            var videosWord = clipCount == 1 ? "video" : "videos";
             var sourceVm = VmFor(bySource.Key);
-            sourceVm.SetContainment($"Source video · contains {clipCount} clip{(clipCount == 1 ? "" : "s")}",
-                MediaItemViewModel.ClipColor, Array.Empty<(int, int)>(), sourceSeconds);
+            sourceVm.SetContainment("Main video", MediaItemViewModel.MainRoleColor, isChild: false,
+                clipCount == 1 ? "The video below is an excerpt of this video." : $"The {clipCount} videos below are excerpts of this video.",
+                MediaItemViewModel.ClipColor,
+                bySource.Select(c => (c.Match.StartSeconds, c.Match.EndSeconds)), sourceSeconds);
 
             var rows = new List<MediaItemViewModel> { sourceVm };
             foreach (var clip in bySource.OrderBy(c => c.Match.StartSeconds))
             {
                 var clipVm = VmFor(clip.Clip);
-                clipVm.SetContainment(
-                    $"Contained at {FormatSeconds(clip.Match.StartSeconds)}–{FormatSeconds(clip.Match.EndSeconds)} · " +
-                    $"{clip.Match.CoveragePercent:0}% of frames match{(clip.Match.IsMirrored ? " (mirrored)" : "")}",
+                clipVm.SetContainment("Excerpt of the main video", MediaItemViewModel.ExcerptRoleColor, isChild: true,
+                    $"This video is inside {mainName}, from {FormatSeconds(clip.Match.StartSeconds)} to " +
+                    $"{FormatSeconds(clip.Match.EndSeconds)}{(clip.Match.IsMirrored ? " (mirrored)" : "")}.",
                     MediaItemViewModel.ClipColor,
                     new[] { (clip.Match.StartSeconds, clip.Match.EndSeconds) },
                     clip.SourceSeconds);
@@ -655,7 +659,7 @@ public partial class MainViewModel : ObservableObject
             groups.Add(new DuplicateGroupViewModel(new DuplicateGroup(), folder.Path, rows)
             {
                 SetNumber = setNumber++,
-                CustomLabel = $"{bySource.Key.FileName} — contains {clipCount} clip{(clipCount == 1 ? "" : "s")}",
+                CustomLabel = $"{mainName} has {clipCount} {videosWord} inside it",
                 Owner = folder,
             });
         }
@@ -664,8 +668,10 @@ public partial class MainViewModel : ObservableObject
         {
             var allSegments = compilation.Sources.SelectMany(s => s.Segments).ToList();
             var compilationVm = VmFor(compilation.Video);
-            compilationVm.SetContainment(
-                $"Compilation · {FormatSeconds(compilation.Seconds)} · {FormatSeconds(allSegments.Sum(s => s.Seconds))} of it comes from the videos below",
+            var compName = compilation.Video.FileName;
+            var sourceCount = compilation.Sources.Count;
+            compilationVm.SetContainment("Compilation", MediaItemViewModel.CompilationColor, isChild: false,
+                sourceCount == 1 ? "This video uses parts of the video below." : $"This video uses parts of the {sourceCount} videos below.",
                 MediaItemViewModel.CompilationColor,
                 allSegments.Select(s => (s.ClipStart, s.ClipEnd)),
                 compilation.Seconds);
@@ -675,9 +681,10 @@ public partial class MainViewModel : ObservableObject
             {
                 var sourceVm = VmFor(source.Source);
                 var notes = source.Segments.Select(s =>
-                    $"{FormatSeconds(s.ClipStart)}–{FormatSeconds(s.ClipEnd)} of the compilation = " +
-                    $"{FormatSeconds(s.SourceStart)}–{FormatSeconds(s.SourceEnd)} of this video{(s.IsMirrored ? " (mirrored)" : "")}");
-                sourceVm.SetContainment(string.Join("\n", notes), MediaItemViewModel.CompilationColor,
+                    $"{FormatSeconds(s.ClipStart)}–{FormatSeconds(s.ClipEnd)} of {compName} comes from this video " +
+                    $"({FormatSeconds(s.SourceStart)}–{FormatSeconds(s.SourceEnd)}){(s.IsMirrored ? " (mirrored)" : "")}.");
+                sourceVm.SetContainment("Used in the compilation", MediaItemViewModel.ExcerptRoleColor, isChild: true,
+                    string.Join("\n", notes), MediaItemViewModel.CompilationColor,
                     source.Segments.Select(s => (s.SourceStart, s.SourceEnd)), source.SourceSeconds);
                 rows.Add(sourceVm);
             }
@@ -685,7 +692,7 @@ public partial class MainViewModel : ObservableObject
             groups.Add(new DuplicateGroupViewModel(new DuplicateGroup(), folder.Path, rows)
             {
                 SetNumber = setNumber++,
-                CustomLabel = $"{compilation.Video.FileName} — compilation · uses parts of {compilation.Sources.Count} video{(compilation.Sources.Count == 1 ? "" : "s")}",
+                CustomLabel = $"{compName} was made from parts of {sourceCount} video{(sourceCount == 1 ? "" : "s")}",
                 Owner = folder,
             });
         }

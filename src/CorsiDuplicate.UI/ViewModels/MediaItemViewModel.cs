@@ -68,8 +68,33 @@ public partial class MediaItemViewModel : ObservableObject
     // the whole length of the video the positions refer to.
     public ObservableCollection<ContainmentBar> ContainmentBars { get; } = new();
 
-    public void SetContainment(string note, string color, IEnumerable<(int Start, int End)> stretches, int totalSeconds)
+    // Role pill above the file name ("Main video", "Excerpt of the main", ...), and whether the
+    // row sits under the set's main video (indented, with a rule on its left).
+    public const string MainRoleColor = "#7F77DD";
+    public const string ExcerptRoleColor = "#1D9E75";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasContainmentRole))]
+    private string? _containmentRole;
+
+    public bool HasContainmentRole => ContainmentRole is not null;
+
+    [ObservableProperty]
+    private string _containmentRoleColor = MainRoleColor;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ContainmentIndent), nameof(ContainmentRule))]
+    private bool _isContainmentChild;
+
+    public System.Windows.Thickness ContainmentIndent => IsContainmentChild ? new(18, 0, 0, 0) : new(0);
+    public System.Windows.Thickness ContainmentRule => IsContainmentChild ? new(2, 0, 0, 0) : new(0);
+
+    public void SetContainment(string role, string roleColor, bool isChild, string note, string color,
+        IEnumerable<(int Start, int End)> stretches, int totalSeconds)
     {
+        ContainmentRole = role;
+        ContainmentRoleColor = roleColor;
+        IsContainmentChild = isChild;
         ContainmentNote = note;
         ContainmentColor = color;
         ContainmentBars.Clear();
@@ -88,6 +113,8 @@ public partial class MediaItemViewModel : ObservableObject
     public void ClearContainment()
     {
         ContainmentNote = null;
+        ContainmentRole = null;
+        IsContainmentChild = false;
         ContainmentColor = ClipColor;
         ContainmentBars.Clear();
         HasContainmentBars = false;
