@@ -31,16 +31,19 @@ public sealed class ScanPipeline : IDisposable
     public async Task<List<MediaItem>> ScanFolderAsync(
         string folderPath,
         IProgress<ScanProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool videosOnly = false)
     {
-        AppLogger.Info(nameof(ScanPipeline), nameof(ScanFolderAsync), $"Starting scan of '{folderPath}'.");
+        AppLogger.Info(nameof(ScanPipeline), nameof(ScanFolderAsync), $"Starting scan of '{folderPath}'{(videosOnly ? " (videos only)" : "")}.");
 
         // Enumeration + cache load are blocking disk I/O; running them on a
         // background thread keeps the UI thread's message pump (window resize,
         // minimize/maximize, input) responsive during a scan.
         var (files, cached) = await Task.Run(() =>
         {
-            var f = _scanner.EnumerateMediaFiles(folderPath).ToList();
+            var f = _scanner.EnumerateMediaFiles(folderPath)
+                .Where(file => !videosOnly || file.Kind == MediaKind.Video)
+                .ToList();
             var c = _cache.Load(folderPath);
             return (f, c);
         }, cancellationToken);
@@ -94,7 +97,12 @@ public sealed class ScanPipeline : IDisposable
             });
 
         var items = results.Where(r => r is not null).Select(r => r!).ToList();
-        await Task.Run(() => _cache.Save(folderPath, items), cancellationToken);
+        // A videos-only scan keeps the folder's cached photo entries, so switching back to
+        // "All" doesn't re-extract every photo.
+        var keptPhotos = videosOnly
+            ? cached.Values.Where(c => c.Kind == MediaKind.Photo).ToList()
+            : new List<CachedMediaItem>();
+        await Task.Run(() => _cache.Save(folderPath, items, keptPhotos), cancellationToken);
         AppLogger.Info(nameof(ScanPipeline), nameof(ScanFolderAsync), $"Finished scan of '{folderPath}': {items.Count}/{files.Count} file(s) extracted.");
         return items;
     }

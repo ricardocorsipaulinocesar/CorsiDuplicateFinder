@@ -56,9 +56,13 @@ public sealed class ScanCacheStore
         }
     }
 
-    public void Save(string folderPath, IEnumerable<MediaItem> items)
+    public void Save(string folderPath, IEnumerable<MediaItem> items, IEnumerable<CachedMediaItem>? alsoKeep = null)
     {
         var entries = items.Select(CachedMediaItem.FromMediaItem).ToList();
+        if (alsoKeep is not null)
+        {
+            entries.AddRange(alsoKeep);
+        }
         var file = CacheFilePath(folderPath);
         using var stream = File.Create(file);
         JsonSerializer.Serialize(stream, entries, JsonOptions);

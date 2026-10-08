@@ -13,7 +13,8 @@ namespace CorsiDuplicate.Infrastructure.Media;
 /// </summary>
 public sealed class VideoFingerprintCache
 {
-    private const int FormatVersion = 1;
+    // v2: content-cropped 64→32 px hashing plus mirrored hashes; v1 files are re-analysed.
+    private const int FormatVersion = 2;
     private readonly string _directory;
 
     public VideoFingerprintCache()
@@ -66,13 +67,15 @@ public sealed class VideoFingerprintCache
 
             var count = reader.ReadInt32();
             var hashes = new ulong[count];
+            var mirrored = new ulong[count];
             var usable = new bool[count];
             for (var i = 0; i < count; i++)
             {
                 hashes[i] = reader.ReadUInt64();
+                mirrored[i] = reader.ReadUInt64();
                 usable[i] = reader.ReadBoolean();
             }
-            return new VideoFingerprint(hashes, usable);
+            return new VideoFingerprint(hashes, usable, mirrored);
         }
         catch (Exception ex) when (ex is IOException or EndOfStreamException)
         {
@@ -90,6 +93,7 @@ public sealed class VideoFingerprintCache
             for (var i = 0; i < fingerprint.Length; i++)
             {
                 writer.Write(fingerprint.Hashes[i]);
+                writer.Write(fingerprint.MirroredHashes?[i] ?? fingerprint.Hashes[i]);
                 writer.Write(fingerprint.Usable[i]);
             }
         }

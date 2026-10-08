@@ -293,6 +293,68 @@
                         Command="{Binding ScanCommand}" IsEnabled="{Binding IsScanning, Converter={StaticResource InverseBool}}"/>
                 <Button Content="Stop scan" Style="{StaticResource PillDanger}" Margin="8,0,0,0"
                         Command="{Binding StopScanCommand}" IsEnabled="{Binding IsScanning}"/>
+
+                <!-- Scan mode: "All" = photos and videos into duplicate Sets (as before);
+                     "Videos only" = skip photos and run the Contained analysis per folder. -->
+                <TextBlock Text="SCAN" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMuted}"
+                           VerticalAlignment="Center" Margin="12,0,8,0"/>
+                <Border BorderBrush="{StaticResource BorderStrong}" BorderThickness="1" CornerRadius="15" ClipToBounds="True"
+                        VerticalAlignment="Center"
+                        IsEnabled="{Binding IsScanning, Converter={StaticResource InverseBool}}"
+                        ToolTip="All: photos and videos, grouped into duplicate sets. Videos only: skips photos and also finds videos contained in longer ones (and compilations) in every folder.">
+                    <Border.Resources>
+                        <Style TargetType="Button" x:Key="ScanModeSegment">
+                            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="FontSize" Value="12"/>
+                            <Setter Property="FontWeight" Value="Bold"/>
+                            <Setter Property="Cursor" Value="Hand"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}" Padding="12,6" CornerRadius="14">
+                                            <ContentPresenter VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Foreground" Value="{StaticResource Text}"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.5"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Resources>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="All" Command="{Binding SetScanModeCommand}" CommandParameter="All">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource ScanModeSegment}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ScanVideosOnly}" Value="False">
+                                            <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Content="&#9654; Videos only" Command="{Binding SetScanModeCommand}" CommandParameter="Videos">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource ScanModeSegment}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ScanVideosOnly}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                </Border>
                 <Border Width="1" Background="{StaticResource Border}" Margin="10,2"/>
 
                 <Border Background="{StaticResource SurfaceAlt}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="6" Padding="10,5" MinWidth="260">
@@ -407,7 +469,7 @@
                         <Button Content="+ Add folder" Style="{StaticResource PillNeutral}"
                                 Command="{Binding AddFolderCommand}" Margin="8,0,0,0"
                                 ToolTip="Select one or more folders to add at once"/>
-                        <Button Content="Hide/Show" Style="{StaticResource PillNeutral}"
+                        <Button Content="Folders" Style="{StaticResource PillNeutral}"
                                 Command="{Binding FolderManager.ToggleManageFoldersCommand}" Margin="6,0,0,0"
                                 ToolTip="Open the full-screen managed-folders list"/>
 
@@ -829,13 +891,25 @@
                                                                                     <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="12"/>
                                                                                     <TextBlock Text="{Binding FolderPath}" FontSize="10" Foreground="{StaticResource TextMuted}"/>
                                                                                     <TextBlock Text="{Binding ContainmentNote}" FontSize="11" FontWeight="SemiBold" Margin="0,3,0,0"
-                                                                                               Foreground="#B89AF5" TextWrapping="Wrap"
+                                                                                               Foreground="{Binding ContainmentColor, Converter={StaticResource StringToBrush}}" TextWrapping="Wrap"
                                                                                                Visibility="{Binding HasContainmentNote, Converter={StaticResource BoolToVis}}"/>
                                                                                     <Border Width="220" Height="6" CornerRadius="3" Background="{StaticResource Border}"
                                                                                             HorizontalAlignment="Left" Margin="0,5,0,0"
-                                                                                            Visibility="{Binding IsContainedClip, Converter={StaticResource BoolToVis}}">
-                                                                                        <Border Background="#B89AF5" CornerRadius="3" HorizontalAlignment="Left"
-                                                                                                Width="{Binding ContainmentBarWidth}" Margin="{Binding ContainmentBarMargin}"/>
+                                                                                            Visibility="{Binding HasContainmentBars, Converter={StaticResource BoolToVis}}">
+                                                                                        <ItemsControl ItemsSource="{Binding ContainmentBars}">
+                                                                                            <ItemsControl.ItemsPanel>
+                                                                                                <ItemsPanelTemplate>
+                                                                                                    <Grid/>
+                                                                                                </ItemsPanelTemplate>
+                                                                                            </ItemsControl.ItemsPanel>
+                                                                                            <ItemsControl.ItemTemplate>
+                                                                                                <DataTemplate>
+                                                                                                    <Border CornerRadius="3" HorizontalAlignment="Left" Height="6"
+                                                                                                            Width="{Binding Width}" Margin="{Binding Margin}"
+                                                                                                            Background="{Binding DataContext.ContainmentColor, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource StringToBrush}}"/>
+                                                                                                </DataTemplate>
+                                                                                            </ItemsControl.ItemTemplate>
+                                                                                        </ItemsControl>
                                                                                     </Border>
                                                                                 </StackPanel>
                                                                             </DataTemplate>

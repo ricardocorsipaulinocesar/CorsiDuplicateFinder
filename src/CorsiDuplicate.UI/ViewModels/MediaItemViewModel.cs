@@ -8,6 +8,8 @@ using CorsiDuplicate.Infrastructure.Media;
 
 namespace CorsiDuplicate.UI.ViewModels;
 
+public sealed record ContainmentBar(System.Windows.Thickness Margin, double Width);
+
 public partial class MediaItemViewModel : ObservableObject
 {
     private static readonly ThumbnailService ThumbnailService = new();
@@ -47,6 +49,9 @@ public partial class MediaItemViewModel : ObservableObject
     // geometry for the position indicator, in pixels of ContainmentBarTrackWidth.
     public const double ContainmentBarTrackWidth = 220;
 
+    public const string ClipColor = "#B89AF5";
+    public const string CompilationColor = "#E8B34B";
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasContainmentNote))]
     private string? _containmentNote;
@@ -54,23 +59,38 @@ public partial class MediaItemViewModel : ObservableObject
     public bool HasContainmentNote => ContainmentNote is not null;
 
     [ObservableProperty]
-    private bool _isContainedClip;
+    private string _containmentColor = ClipColor;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ContainmentBarMargin))]
-    private double _containmentBarOffset;
+    private bool _hasContainmentBars;
 
-    public System.Windows.Thickness ContainmentBarMargin => new(ContainmentBarOffset, 0, 0, 0);
+    // One highlighted stretch per shared segment, positioned along a track that represents
+    // the whole length of the video the positions refer to.
+    public ObservableCollection<ContainmentBar> ContainmentBars { get; } = new();
 
-    [ObservableProperty]
-    private double _containmentBarWidth;
+    public void SetContainment(string note, string color, IEnumerable<(int Start, int End)> stretches, int totalSeconds)
+    {
+        ContainmentNote = note;
+        ContainmentColor = color;
+        ContainmentBars.Clear();
+        if (totalSeconds > 0)
+        {
+            foreach (var (start, end) in stretches)
+            {
+                var offset = ContainmentBarTrackWidth * start / totalSeconds;
+                var width = Math.Max(3, ContainmentBarTrackWidth * (end - start) / totalSeconds);
+                ContainmentBars.Add(new ContainmentBar(new System.Windows.Thickness(offset, 0, 0, 0), width));
+            }
+        }
+        HasContainmentBars = ContainmentBars.Count > 0;
+    }
 
     public void ClearContainment()
     {
         ContainmentNote = null;
-        IsContainedClip = false;
-        ContainmentBarOffset = 0;
-        ContainmentBarWidth = 0;
+        ContainmentColor = ClipColor;
+        ContainmentBars.Clear();
+        HasContainmentBars = false;
     }
 
     public ObservableCollection<BitmapImage> Thumbnails { get; } = new();

@@ -78,6 +78,51 @@ public class ContainmentMatcherTests
     }
 
     [Fact]
+    public void Finds_a_mirrored_excerpt_and_flags_it()
+    {
+        var source = RandomVideo(400, seed: 10);
+        var excerpt = Excerpt(source, start: 120, length: 30, seed: 11);
+        // The clip's own frames don't match; its mirrored frames are the source's.
+        var clip = new VideoFingerprint(RandomVideo(30, seed: 12).Hashes, excerpt.Usable, excerpt.Hashes);
+
+        var match = ContainmentMatcher.Find(clip, source);
+
+        Assert.NotNull(match);
+        Assert.True(match!.IsMirrored);
+        Assert.Equal(120, match.StartSeconds);
+    }
+
+    [Fact]
+    public void Static_scenes_do_not_make_unrelated_videos_match()
+    {
+        // Both videos are the same still view the whole time (e.g. same room, fixed camera).
+        const ulong still = 0x5A5A_F0F0_3C3C_0F0FUL;
+        var source = new VideoFingerprint(Enumerable.Repeat(still, 300).ToArray(), Enumerable.Repeat(true, 300).ToArray());
+        var clip = new VideoFingerprint(Enumerable.Repeat(still ^ 0b101, 30).ToArray(), Enumerable.Repeat(true, 30).ToArray());
+
+        Assert.Null(ContainmentMatcher.Find(clip, source));
+    }
+
+    [Fact]
+    public void A_compilation_shares_one_segment_with_each_source()
+    {
+        var first = RandomVideo(300, seed: 13);
+        var second = RandomVideo(200, seed: 14);
+        var partA = Excerpt(first, start: 50, length: 30, seed: 15);
+        var partB = Excerpt(second, start: 20, length: 25, seed: 16);
+        var compilation = new VideoFingerprint(partA.Hashes.Concat(partB.Hashes).ToArray(), Enumerable.Repeat(true, 55).ToArray());
+
+        var withFirst = ContainmentMatcher.Compare(compilation, first);
+        var withSecond = ContainmentMatcher.Compare(compilation, second);
+
+        Assert.Null(withFirst.Contained);
+        var a = Assert.Single(withFirst.Segments);
+        Assert.Equal((0, 30, 50, 80), (a.ClipStart, a.ClipEnd, a.SourceStart, a.SourceEnd));
+        var b = Assert.Single(withSecond.Segments);
+        Assert.Equal((30, 55, 20, 45), (b.ClipStart, b.ClipEnd, b.SourceStart, b.SourceEnd));
+    }
+
+    [Fact]
     public void A_near_full_length_copy_is_left_to_duplicate_detection()
     {
         var source = RandomVideo(100, seed: 8);

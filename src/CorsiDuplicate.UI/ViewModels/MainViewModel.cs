@@ -120,6 +120,27 @@ public partial class MainViewModel : ObservableObject
     private readonly VideoFingerprintCache _fingerprintCache = new();
     private CancellationTokenSource? _processingCts;
 
+    // Last Contained analysis per folder, and the folders currently showing it — regrouping
+    // (slider, next folder finishing) rebuilds every folder's Sets, so those folders get their
+    // Contained view re-applied instead of silently falling back to duplicate Sets.
+    private readonly Dictionary<string, ContainmentResult> _containmentByFolder = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _containedViewFolders = new(StringComparer.OrdinalIgnoreCase);
+
+    // "Videos only" scan mode: photos are skipped and every folder gets the Contained analysis
+    // right after its duplicate grouping. Persisted like ThumbnailsPerVideo.
+    [ObservableProperty]
+    private bool _scanVideosOnly;
+
+    partial void OnScanVideosOnlyChanged(bool value)
+    {
+        var settings = _appSettingsStore.Load();
+        settings.ScanVideosOnly = value;
+        _appSettingsStore.Save(settings);
+    }
+
+    [RelayCommand]
+    private void SetScanMode(string? mode) => ScanVideosOnly = mode == "Videos";
+
     [ObservableProperty]
     private bool _isProcessingCancellable;
 
@@ -147,6 +168,7 @@ public partial class MainViewModel : ObservableObject
 
         var settings = _appSettingsStore.Load();
         ThumbnailsPerVideo = Math.Max(1, settings.ThumbnailsPerVideo);
+        _scanVideosOnly = settings.ScanVideosOnly;
         MediaItemViewModel.ThumbnailsPerVideo = ThumbnailsPerVideo;
     }
 
@@ -377,6 +399,7 @@ public partial class MainViewModel : ObservableObject
 
     private void RestoreFolderView(FolderResultsViewModel folder)
     {
+        _containedViewFolders.Remove(folder.Path);
         foreach (var item in folder.Groups.SelectMany(g => g.Items))
         {
             item.ClearContainment();
@@ -388,55 +411,18 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void CancelProcessing() => _processingCts?.Cancel();
 
-    /// <summary>
-    /// "Contained" filter: fingerprints every video scanned in this folder (not only those
-    /// already in a duplicate Set — an excerpt usually isn't in any), then shows one Set per
-    /// source video with the clips found inside it and where.
-    /// </summary>
+    /// <summary>Folder "Contained" button: same analysis as a videos-only scan, but behind
+    /// the cancellable processing modal.</summary>
     private async Task ShowContainedVideosAsync(FolderResultsViewModel folder)
     {
-        if (!_scannedItemsByFolder.TryGetValue(folder.Path, out var scanned))
-        {
-            return;
-        }
-
-        var videos = scanned.Where(i => i.Kind == MediaKind.Video).ToList();
-        if (videos.Count < 2)
-        {
-            StatusMessage = "Contained: this folder needs at least two videos.";
-            return;
-        }
-
         _processingCts = new CancellationTokenSource();
-        var ct = _processingCts.Token;
         IsProcessingCancellable = true;
         IsProcessing = true;
-        List<(MediaItem Clip, MediaItem Source, int SourceSeconds, ContainmentMatch Match)> matches;
+        ContainmentResult? result;
         try
         {
-            var fingerprints = new Dictionary<MediaItem, VideoFingerprint>();
-            for (var i = 0; i < videos.Count; i++)
-            {
-                var video = videos[i];
-                ProcessingMessage = _fingerprintCache.Contains(video)
-                    ? $"Analyzing videos {i + 1}/{videos.Count}..."
-                    : $"Analyzing videos {i + 1}/{videos.Count}... reading {video.FileName}";
-                try
-                {
-                    if (await _fingerprintCache.GetOrCreateAsync(video, ct) is { } fingerprint)
-                    {
-                        fingerprints[video] = fingerprint;
-                    }
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    AppLogger.Error(nameof(MainViewModel), nameof(ShowContainedVideosAsync),
-                        $"Could not fingerprint '{video.FullPath}'.", ex);
-                }
-            }
-
-            ProcessingMessage = "Comparing videos...";
-            matches = await Task.Run(() => FindContainedVideos(fingerprints, ct), ct);
+            var progress = new Progress<string>(message => ProcessingMessage = message);
+            result = await ComputeContainmentAsync(folder.Path, progress, _processingCts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -451,13 +437,193 @@ public partial class MainViewModel : ObservableObject
             _processingCts = null;
         }
 
-        if (matches.Count == 0)
+        if (result is null)
+        {
+            StatusMessage = "Contained: this folder needs at least two videos.";
+            return;
+        }
+
+        if (result.IsEmpty)
         {
             StatusMessage = $"No contained videos found in {FolderDisplayName(folder.Path)}.";
             return;
         }
 
+        _containmentByFolder[folder.Path] = result;
+        _containedViewFolders.Add(folder.Path);
+        ApplyContainedView(folder, result);
+        StatusMessage = $"Contained: {result.Summary}.";
+    }
+
+    /// <summary>
+    /// Fingerprints every video scanned in the folder (several at once; each is decoded only
+    /// the first time, then read from the on-disk cache), then compares every pair. Null when
+    /// the folder has fewer than two videos.
+    /// </summary>
+    private async Task<ContainmentResult?> ComputeContainmentAsync(string folderPath, IProgress<string> progress, CancellationToken ct)
+    {
+        if (!_scannedItemsByFolder.TryGetValue(folderPath, out var scanned))
+        {
+            return null;
+        }
+
+        var videos = scanned.Where(i => i.Kind == MediaKind.Video).ToList();
+        if (videos.Count < 2)
+        {
+            return null;
+        }
+
+        var folderName = FolderDisplayName(folderPath);
+        var fingerprints = new System.Collections.Concurrent.ConcurrentDictionary<MediaItem, VideoFingerprint>();
+        var done = 0;
+        progress.Report($"Analyzing videos 0/{videos.Count} - {folderName}");
+
+        await Parallel.ForEachAsync(videos,
+            new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4), CancellationToken = ct },
+            async (video, token) =>
+            {
+                try
+                {
+                    if (await _fingerprintCache.GetOrCreateAsync(video, token) is { } fingerprint)
+                    {
+                        fingerprints[video] = fingerprint;
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    AppLogger.Error(nameof(MainViewModel), nameof(ComputeContainmentAsync),
+                        $"Could not fingerprint '{video.FullPath}'.", ex);
+                }
+
+                progress.Report($"Analyzing videos {Interlocked.Increment(ref done)}/{videos.Count} - {folderName}");
+            });
+
+        progress.Report($"Comparing videos - {folderName}");
+        return await Task.Run(() => ClassifyContainment(fingerprints, ct), ct);
+    }
+
+    private sealed record ContainedClip(MediaItem Clip, MediaItem Source, int SourceSeconds, ContainmentMatch Match);
+
+    private sealed record CompilationSource(MediaItem Source, int SourceSeconds, IReadOnlyList<SharedSegment> Segments);
+
+    private sealed record Compilation(MediaItem Video, int Seconds, IReadOnlyList<CompilationSource> Sources);
+
+    private sealed record ContainmentResult(IReadOnlyList<ContainedClip> Clips, IReadOnlyList<Compilation> Compilations)
+    {
+        public bool IsEmpty => Clips.Count == 0 && Compilations.Count == 0;
+
+        public string Summary
+        {
+            get
+            {
+                var parts = new List<string>();
+                if (Clips.Count > 0)
+                {
+                    parts.Add($"{Clips.Count} clip(s) found inside {Clips.Select(c => c.Source).Distinct().Count()} video(s)");
+                }
+                if (Compilations.Count > 0)
+                {
+                    parts.Add($"{Compilations.Count} compilation(s)");
+                }
+                return string.Join(", ", parts);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Compares every ordered pair. A video found inside a longer one is shown under its best
+    /// source. A video that isn't a clip but shares stretches with two or more videos (or with
+    /// one, covering at least 30 % of it) is a compilation — its own clips and duplicate copies
+    /// of it are not counted as its sources.
+    /// </summary>
+    private static ContainmentResult ClassifyContainment(
+        IReadOnlyDictionary<MediaItem, VideoFingerprint> fingerprints, CancellationToken ct)
+    {
+        var videos = fingerprints.Keys.ToList();
+        var comparisons = new ContainmentComparison?[videos.Count, videos.Count];
+
+        Parallel.For(0, videos.Count, new ParallelOptions { CancellationToken = ct }, a =>
+        {
+            for (var b = 0; b < videos.Count; b++)
+            {
+                if (a != b)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    comparisons[a, b] = ContainmentMatcher.Compare(fingerprints[videos[a]], fingerprints[videos[b]]);
+                }
+            }
+        });
+
+        var containedIn = new int?[videos.Count];
+        var clips = new List<ContainedClip>();
+        for (var a = 0; a < videos.Count; a++)
+        {
+            ContainmentMatch? best = null;
+            for (var b = 0; b < videos.Count; b++)
+            {
+                if (comparisons[a, b]?.Contained is { } match && (best is null || match.CoveragePercent > best.CoveragePercent))
+                {
+                    best = match;
+                    containedIn[a] = b;
+                }
+            }
+
+            if (best is not null && containedIn[a] is { } source)
+            {
+                clips.Add(new ContainedClip(videos[a], videos[source], fingerprints[videos[source]].Length, best));
+            }
+        }
+
+        var compilations = new List<Compilation>();
+        for (var a = 0; a < videos.Count; a++)
+        {
+            if (containedIn[a] is not null)
+            {
+                continue;
+            }
+
+            var length = fingerprints[videos[a]].Length;
+            var sources = new List<CompilationSource>();
+            for (var b = 0; b < videos.Count; b++)
+            {
+                if (a == b || containedIn[b] == a || comparisons[a, b] is not { Segments.Count: > 0 } comparison)
+                {
+                    continue;
+                }
+
+                var shared = comparison.Segments.Sum(s => s.Seconds);
+                var otherLength = fingerprints[videos[b]].Length;
+                var isDuplicateCopy = shared >= length * 0.8
+                    && Math.Abs(length - otherLength) <= Math.Max(length, otherLength) * (1 - ContainmentMatcher.MaxClipToSourceLengthRatio);
+                if (!isDuplicateCopy)
+                {
+                    sources.Add(new CompilationSource(videos[b], otherLength, comparison.Segments));
+                }
+            }
+
+            var covered = sources.Sum(s => s.Segments.Sum(seg => seg.Seconds));
+            if (sources.Count >= 2 || (sources.Count == 1 && covered >= length * 0.3))
+            {
+                compilations.Add(new Compilation(videos[a], length, sources));
+            }
+        }
+
+        return new ContainmentResult(clips, compilations);
+    }
+
+    /// <summary>Replaces the folder's Sets with one Set per source video (its clips below it)
+    /// and one per compilation (its source videos below it). Click "Contained" again to go back.</summary>
+    private void ApplyContainedView(FolderResultsViewModel folder, ContainmentResult result,
+        IReadOnlyDictionary<string, MediaItemViewModel>? knownItems = null)
+    {
+        foreach (var item in folder.Groups.SelectMany(g => g.Items))
+        {
+            item.ClearContainment();
+        }
+
+        // Reuse every item view model that already exists (keeps thumbnails and check state).
         var existing = folder.Groups.SelectMany(g => g.Items)
+            .Concat(knownItems?.Values ?? Enumerable.Empty<MediaItemViewModel>())
             .GroupBy(i => i.Model.FullPath, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         MediaItemViewModel VmFor(MediaItem item) =>
@@ -465,22 +631,24 @@ public partial class MainViewModel : ObservableObject
 
         var groups = new List<DuplicateGroupViewModel>();
         var setNumber = 1;
-        foreach (var bySource in matches.GroupBy(m => m.Source).OrderByDescending(g => g.Count()))
+        foreach (var bySource in result.Clips.GroupBy(c => c.Source).OrderByDescending(g => g.Count()))
         {
-            var sourceVm = VmFor(bySource.Key);
             var clipCount = bySource.Count();
-            sourceVm.ContainmentNote = $"Source video · contains {clipCount} clip{(clipCount == 1 ? "" : "s")}";
+            var sourceSeconds = bySource.First().SourceSeconds;
+            var sourceVm = VmFor(bySource.Key);
+            sourceVm.SetContainment($"Source video · contains {clipCount} clip{(clipCount == 1 ? "" : "s")}",
+                MediaItemViewModel.ClipColor, Array.Empty<(int, int)>(), sourceSeconds);
 
             var rows = new List<MediaItemViewModel> { sourceVm };
-            foreach (var (clip, _, sourceSeconds, match) in bySource.OrderBy(m => m.Match.StartSeconds))
+            foreach (var clip in bySource.OrderBy(c => c.Match.StartSeconds))
             {
-                var clipVm = VmFor(clip);
-                clipVm.IsContainedClip = true;
-                clipVm.ContainmentNote =
-                    $"Contained at {FormatSeconds(match.StartSeconds)}–{FormatSeconds(match.EndSeconds)} · {match.CoveragePercent:0}% of frames match";
-                var track = MediaItemViewModel.ContainmentBarTrackWidth;
-                clipVm.ContainmentBarOffset = track * match.StartSeconds / sourceSeconds;
-                clipVm.ContainmentBarWidth = Math.Max(3, track * (match.EndSeconds - match.StartSeconds) / sourceSeconds);
+                var clipVm = VmFor(clip.Clip);
+                clipVm.SetContainment(
+                    $"Contained at {FormatSeconds(clip.Match.StartSeconds)}–{FormatSeconds(clip.Match.EndSeconds)} · " +
+                    $"{clip.Match.CoveragePercent:0}% of frames match{(clip.Match.IsMirrored ? " (mirrored)" : "")}",
+                    MediaItemViewModel.ClipColor,
+                    new[] { (clip.Match.StartSeconds, clip.Match.EndSeconds) },
+                    clip.SourceSeconds);
                 rows.Add(clipVm);
             }
 
@@ -492,45 +660,66 @@ public partial class MainViewModel : ObservableObject
             });
         }
 
+        foreach (var compilation in result.Compilations)
+        {
+            var allSegments = compilation.Sources.SelectMany(s => s.Segments).ToList();
+            var compilationVm = VmFor(compilation.Video);
+            compilationVm.SetContainment(
+                $"Compilation · {FormatSeconds(compilation.Seconds)} · {FormatSeconds(allSegments.Sum(s => s.Seconds))} of it comes from the videos below",
+                MediaItemViewModel.CompilationColor,
+                allSegments.Select(s => (s.ClipStart, s.ClipEnd)),
+                compilation.Seconds);
+
+            var rows = new List<MediaItemViewModel> { compilationVm };
+            foreach (var source in compilation.Sources)
+            {
+                var sourceVm = VmFor(source.Source);
+                var notes = source.Segments.Select(s =>
+                    $"{FormatSeconds(s.ClipStart)}–{FormatSeconds(s.ClipEnd)} of the compilation = " +
+                    $"{FormatSeconds(s.SourceStart)}–{FormatSeconds(s.SourceEnd)} of this video{(s.IsMirrored ? " (mirrored)" : "")}");
+                sourceVm.SetContainment(string.Join("\n", notes), MediaItemViewModel.CompilationColor,
+                    source.Segments.Select(s => (s.SourceStart, s.SourceEnd)), source.SourceSeconds);
+                rows.Add(sourceVm);
+            }
+
+            groups.Add(new DuplicateGroupViewModel(new DuplicateGroup(), folder.Path, rows)
+            {
+                SetNumber = setNumber++,
+                CustomLabel = $"{compilation.Video.FileName} — compilation · uses parts of {compilation.Sources.Count} video{(compilation.Sources.Count == 1 ? "" : "s")}",
+                Owner = folder,
+            });
+        }
+
         folder.ApplyFlattenedOrder(groups, ContainedFilterKey);
         Selection.Recompute(FolderResults.SelectMany(f => f.Groups).SelectMany(g => g.Items).Distinct());
-        StatusMessage = $"Contained: {matches.Count} clip(s) found inside {groups.Count} video(s).";
     }
 
-    /// <summary>Each video is tested against every longer video; a clip found in several
-    /// (e.g. the source and a duplicate copy of it) is shown under its best match.</summary>
-    private static List<(MediaItem Clip, MediaItem Source, int SourceSeconds, ContainmentMatch Match)> FindContainedVideos(
-        Dictionary<MediaItem, VideoFingerprint> fingerprints, CancellationToken ct)
+    private FolderResultsViewModel CreateFolderResults(string folderPath, int itemCount)
     {
-        var ordered = fingerprints.OrderBy(kv => kv.Value.Length).ToList();
-        var results = new List<(MediaItem, MediaItem, int, ContainmentMatch)>();
-        var gate = new object();
-
-        Parallel.For(0, ordered.Count, new ParallelOptions { CancellationToken = ct }, i =>
+        if (!_folderExpandState.TryGetValue(folderPath, out var isExpanded))
         {
-            var (clip, clipFp) = ordered[i];
-            (MediaItem Source, int Seconds, ContainmentMatch Match)? best = null;
-            for (var j = i + 1; j < ordered.Count; j++)
-            {
-                ct.ThrowIfCancellationRequested();
-                var (source, sourceFp) = ordered[j];
-                if (ContainmentMatcher.Find(clipFp, sourceFp) is { } match
-                    && (best is null || match.CoveragePercent > best.Value.Match.CoveragePercent))
-                {
-                    best = (source, sourceFp.Length, match);
-                }
-            }
+            // First folder to ever produce results starts expanded; every one after starts collapsed.
+            isExpanded = _folderExpandState.Count == 0;
+            _folderExpandState[folderPath] = isExpanded;
+        }
 
-            if (best is { } b)
-            {
-                lock (gate)
-                {
-                    results.Add((clip, b.Source, b.Seconds, b.Match));
-                }
-            }
-        });
+        var folderVm = new FolderResultsViewModel(folderPath, itemCount) { IsExpanded = isExpanded };
+        folderVm.ExpandedChanged += expanded => _folderExpandState[folderPath] = expanded;
+        return folderVm;
+    }
 
-        return results;
+    /// <summary>The folder's results block, created when the folder had no duplicate Sets
+    /// (a videos-only scan can still find clips there).</summary>
+    private FolderResultsViewModel EnsureFolderResults(string folderPath, int itemCount)
+    {
+        var folderVm = FolderResults.FirstOrDefault(f => string.Equals(f.Path, folderPath, StringComparison.OrdinalIgnoreCase));
+        if (folderVm is null)
+        {
+            folderVm = CreateFolderResults(folderPath, itemCount);
+            FolderResults.Add(folderVm);
+            OnPropertyChanged(nameof(HasAnyResults));
+        }
+        return folderVm;
     }
 
     private static string FormatSeconds(int seconds) =>
@@ -615,6 +804,9 @@ public partial class MainViewModel : ObservableObject
         ScanProgressTotal = 0;
         IsProgressIndeterminate = true;
         _scanStartUtc = DateTime.UtcNow;
+        _containmentByFolder.Clear();
+        _containedViewFolders.Clear();
+        var videosOnly = ScanVideosOnly;
 
         var cancelled = false;
 
@@ -644,13 +836,26 @@ public partial class MainViewModel : ObservableObject
                         StatusMessage = $"Scanning... {p.FilesDone}/{p.FilesTotal} - {folderDisplayName}{FormatEta(p)}";
                     });
 
-                    var items = await _scanPipeline.ScanFolderAsync(folder.Path, progress, _scanCts.Token);
+                    var items = await _scanPipeline.ScanFolderAsync(folder.Path, progress, _scanCts.Token, videosOnly);
                     FolderManager.RecordScanResult(folder.Path, items.Count);
                     _scannedItemsByFolder[folder.Path] = items;
 
                     // Results appear per folder as each one finishes, instead of waiting
                     // for every enabled folder to complete before showing anything.
                     await RebuildResultsFromMemoryAsync();
+
+                    if (videosOnly)
+                    {
+                        IsProgressIndeterminate = true;
+                        var analysisProgress = new Progress<string>(message => StatusMessage = message);
+                        var containment = await ComputeContainmentAsync(folder.Path, analysisProgress, _scanCts.Token);
+                        if (containment is { IsEmpty: false })
+                        {
+                            _containmentByFolder[folder.Path] = containment;
+                            _containedViewFolders.Add(folder.Path);
+                            ApplyContainedView(EnsureFolderResults(folder.Path, items.Count), containment);
+                        }
+                    }
                 }
                 catch (OperationCanceledException)
                 {
@@ -687,6 +892,16 @@ public partial class MainViewModel : ObservableObject
             {
                 StatusMessage = "Scan stopped.";
                 AppLogger.Info(nameof(MainViewModel), nameof(ScanAsync), "Scan stopped by user.");
+            }
+            else if (videosOnly)
+            {
+                var all = new ContainmentResult(
+                    _containmentByFolder.Values.SelectMany(r => r.Clips).ToList(),
+                    _containmentByFolder.Values.SelectMany(r => r.Compilations).ToList());
+                StatusMessage = all.IsEmpty
+                    ? "Scan complete. No contained videos found."
+                    : $"Scan complete. {all.Summary}.";
+                AppLogger.Info(nameof(MainViewModel), nameof(ScanAsync), $"Videos-only scan complete: {StatusMessage}");
             }
             else
             {
@@ -839,20 +1054,14 @@ public partial class MainViewModel : ObservableObject
 
         foreach (var (folderPath, groups, itemCount) in perFolder)
         {
-            if (groups.Count == 0)
+            var showContained = _containedViewFolders.Contains(folderPath)
+                && _containmentByFolder.TryGetValue(folderPath, out _);
+            if (groups.Count == 0 && !showContained)
             {
                 continue;
             }
 
-            if (!_folderExpandState.TryGetValue(folderPath, out var isExpanded))
-            {
-                // First folder to ever produce results starts expanded; every one after starts collapsed.
-                isExpanded = _folderExpandState.Count == 0;
-                _folderExpandState[folderPath] = isExpanded;
-            }
-
-            var folderVm = new FolderResultsViewModel(folderPath, itemCount) { IsExpanded = isExpanded };
-            folderVm.ExpandedChanged += expanded => _folderExpandState[folderPath] = expanded;
+            var folderVm = CreateFolderResults(folderPath, itemCount);
 
             var setNumber = 1;
             foreach (var group in groups)
@@ -865,6 +1074,11 @@ public partial class MainViewModel : ObservableObject
                 folderVm.Groups.Add(new DuplicateGroupViewModel(group, folderPath, itemVms) { SetNumber = setNumber++, Owner = folderVm });
             }
             FolderResults.Add(folderVm);
+
+            if (showContained)
+            {
+                ApplyContainedView(folderVm, _containmentByFolder[folderPath], existingByPath);
+            }
         }
 
         Selection.Recompute(FolderResults.SelectMany(f => f.Groups).SelectMany(g => g.Items).Distinct());
