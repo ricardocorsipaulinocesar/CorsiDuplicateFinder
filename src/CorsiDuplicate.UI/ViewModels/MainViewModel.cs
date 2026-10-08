@@ -670,7 +670,7 @@ public partial class MainViewModel : ObservableObject
             var compilationVm = VmFor(compilation.Video);
             var compName = compilation.Video.FileName;
             var sourceCount = compilation.Sources.Count;
-            compilationVm.SetContainment("Compilation", MediaItemViewModel.CompilationColor, isChild: false,
+            compilationVm.SetContainment("Compilação", MediaItemViewModel.CompilationColor, isChild: false,
                 sourceCount == 1 ? "This video uses parts of the video below." : $"This video uses parts of the {sourceCount} videos below.",
                 MediaItemViewModel.CompilationColor,
                 allSegments.Select(s => (s.ClipStart, s.ClipEnd)),

@@ -34,8 +34,11 @@ DefaultGroupName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 OutputDir=Output
 OutputBaseFilename=CorsiDuplicateFinderSetup
-Compression=lzma2
+; lzma2/fast with multi-threading: much quicker builds for a slightly larger setup.
+Compression=lzma2/fast
 SolidCompression=yes
+LZMAUseSeparateProcess=yes
+LZMANumBlockThreads=4
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
