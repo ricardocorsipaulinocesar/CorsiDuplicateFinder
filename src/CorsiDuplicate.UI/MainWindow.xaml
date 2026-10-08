@@ -329,11 +329,12 @@
                         </Style>
                     </Border.Resources>
                     <StackPanel Orientation="Horizontal">
-                        <Button Content="All" Command="{Binding SetScanModeCommand}" CommandParameter="All">
+                        <Button Content="All" Command="{Binding SetScanModeCommand}" CommandParameter="All"
+                                ToolTip="Photos and videos: looks for duplicates">
                             <Button.Style>
                                 <Style TargetType="Button" BasedOn="{StaticResource ScanModeSegment}">
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding ScanVideosOnly}" Value="False">
+                                        <DataTrigger Binding="{Binding IsScanModeAll}" Value="True">
                                             <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
                                             <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
                                         </DataTrigger>
@@ -341,11 +342,25 @@
                                 </Style>
                             </Button.Style>
                         </Button>
-                        <Button Content="&#9654; Videos only" Command="{Binding SetScanModeCommand}" CommandParameter="Videos">
+                        <Button Content="Videos" Command="{Binding SetScanModeCommand}" CommandParameter="Videos"
+                                ToolTip="Skips photos: looks only for duplicate videos">
                             <Button.Style>
                                 <Style TargetType="Button" BasedOn="{StaticResource ScanModeSegment}">
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding ScanVideosOnly}" Value="True">
+                                        <DataTrigger Binding="{Binding IsScanModeVideos}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Content="Videos+Contained" Command="{Binding SetScanModeCommand}" CommandParameter="VideosContained"
+                                ToolTip="Skips photos and, in each folder, compares every video with the others (ignores the similarity filter) to find excerpts and compilations">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource ScanModeSegment}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsScanModeVideosContained}" Value="True">
                                             <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
                                             <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
                                         </DataTrigger>

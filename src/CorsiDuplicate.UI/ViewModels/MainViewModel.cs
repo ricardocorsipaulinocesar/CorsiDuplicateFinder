@@ -126,20 +126,31 @@ public partial class MainViewModel : ObservableObject
     private readonly Dictionary<string, ContainmentResult> _containmentByFolder = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _containedViewFolders = new(StringComparer.OrdinalIgnoreCase);
 
-    // "Videos only" scan mode: photos are skipped and every folder gets the Contained analysis
-    // right after its duplicate grouping. Persisted like ThumbnailsPerVideo.
-    [ObservableProperty]
-    private bool _scanVideosOnly;
+    // Scan mode: "All" (photos and videos), "Videos" (photos skipped) or "VideosContained"
+    // (photos skipped, and every folder gets the Contained analysis right after its duplicate
+    // grouping). Persisted like ThumbnailsPerVideo.
+    public const string ScanModeAll = "All";
+    public const string ScanModeVideos = "Videos";
+    public const string ScanModeVideosContained = "VideosContained";
 
-    partial void OnScanVideosOnlyChanged(bool value)
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsScanModeAll), nameof(IsScanModeVideos), nameof(IsScanModeVideosContained))]
+    private string _scanMode = ScanModeAll;
+
+    public bool IsScanModeAll => ScanMode == ScanModeAll;
+    public bool IsScanModeVideos => ScanMode == ScanModeVideos;
+    public bool IsScanModeVideosContained => ScanMode == ScanModeVideosContained;
+
+    partial void OnScanModeChanged(string value)
     {
         var settings = _appSettingsStore.Load();
-        settings.ScanVideosOnly = value;
+        settings.ScanMode = value;
         _appSettingsStore.Save(settings);
     }
 
     [RelayCommand]
-    private void SetScanMode(string? mode) => ScanVideosOnly = mode == "Videos";
+    private void SetScanMode(string? mode) =>
+        ScanMode = mode is ScanModeVideos or ScanModeVideosContained ? mode : ScanModeAll;
 
     [ObservableProperty]
     private bool _isProcessingCancellable;
@@ -171,7 +182,9 @@ public partial class MainViewModel : ObservableObject
 
         var settings = _appSettingsStore.Load();
         ThumbnailsPerVideo = Math.Max(1, settings.ThumbnailsPerVideo);
-        _scanVideosOnly = settings.ScanVideosOnly;
+        _scanMode = settings.ScanMode is ScanModeAll or ScanModeVideos or ScanModeVideosContained
+            ? settings.ScanMode
+            : settings.ScanVideosOnly ? ScanModeVideosContained : ScanModeAll;
         MediaItemViewModel.ThumbnailsPerVideo = ThumbnailsPerVideo;
     }
 
@@ -639,10 +652,11 @@ public partial class MainViewModel : ObservableObject
             var clipCount = bySource.Count();
             var sourceSeconds = bySource.First().SourceSeconds;
             var mainName = bySource.Key.FileName;
-            var videosWord = clipCount == 1 ? "video" : "videos";
             var sourceVm = VmFor(bySource.Key);
-            sourceVm.SetContainment("Main video", MediaItemViewModel.MainRoleColor, isChild: false,
-                clipCount == 1 ? "The video below is an excerpt of this video." : $"The {clipCount} videos below are excerpts of this video.",
+            sourceVm.SetContainment("ORIGINAL", MediaItemViewModel.MainRoleColor, isChild: false,
+                clipCount == 1
+                    ? "Este é o vídeo original. O vídeo abaixo está dentro dele."
+                    : $"Este é o vídeo original. Os {clipCount} vídeos abaixo estão dentro dele.",
                 MediaItemViewModel.ClipColor,
                 bySource.Select(c => (c.Match.StartSeconds, c.Match.EndSeconds)), sourceSeconds);
 
@@ -650,9 +664,9 @@ public partial class MainViewModel : ObservableObject
             foreach (var clip in bySource.OrderBy(c => c.Match.StartSeconds))
             {
                 var clipVm = VmFor(clip.Clip);
-                clipVm.SetContainment("Excerpt of the main video", MediaItemViewModel.ExcerptRoleColor, isChild: true,
-                    $"This video is inside {mainName}, from {FormatSeconds(clip.Match.StartSeconds)} to " +
-                    $"{FormatSeconds(clip.Match.EndSeconds)}{(clip.Match.IsMirrored ? " (mirrored)" : "")}.",
+                clipVm.SetContainment("ESTÁ DENTRO DO ORIGINAL", MediaItemViewModel.ExcerptRoleColor, isChild: true,
+                    $"Este vídeo está dentro do {mainName} (de {FormatSeconds(clip.Match.StartSeconds)} até " +
+                    $"{FormatSeconds(clip.Match.EndSeconds)}{(clip.Match.IsMirrored ? ", espelhado" : "")}).",
                     MediaItemViewModel.ClipColor,
                     new[] { (clip.Match.StartSeconds, clip.Match.EndSeconds) },
                     clip.SourceSeconds);
@@ -662,7 +676,7 @@ public partial class MainViewModel : ObservableObject
             groups.Add(new DuplicateGroupViewModel(new DuplicateGroup(), folder.Path, rows)
             {
                 SetNumber = setNumber++,
-                CustomLabel = $"{mainName} has {clipCount} {videosWord} inside it",
+                CustomLabel = $"{mainName} é o original de {clipCount} vídeo{(clipCount == 1 ? "" : "s")}",
                 Owner = folder,
             });
         }
@@ -673,8 +687,10 @@ public partial class MainViewModel : ObservableObject
             var compilationVm = VmFor(compilation.Video);
             var compName = compilation.Video.FileName;
             var sourceCount = compilation.Sources.Count;
-            compilationVm.SetContainment("Compilação", MediaItemViewModel.CompilationColor, isChild: false,
-                sourceCount == 1 ? "This video uses parts of the video below." : $"This video uses parts of the {sourceCount} videos below.",
+            compilationVm.SetContainment("COMPILAÇÃO", MediaItemViewModel.CompilationColor, isChild: false,
+                sourceCount == 1
+                    ? "Este vídeo foi montado com pedaços do vídeo abaixo."
+                    : $"Este vídeo foi montado com pedaços dos {sourceCount} vídeos abaixo.",
                 MediaItemViewModel.CompilationColor,
                 allSegments.Select(s => (s.ClipStart, s.ClipEnd)),
                 compilation.Seconds);
@@ -684,9 +700,9 @@ public partial class MainViewModel : ObservableObject
             {
                 var sourceVm = VmFor(source.Source);
                 var notes = source.Segments.Select(s =>
-                    $"{FormatSeconds(s.ClipStart)}–{FormatSeconds(s.ClipEnd)} of {compName} comes from this video " +
-                    $"({FormatSeconds(s.SourceStart)}–{FormatSeconds(s.SourceEnd)}){(s.IsMirrored ? " (mirrored)" : "")}.");
-                sourceVm.SetContainment("Used in the compilation", MediaItemViewModel.ExcerptRoleColor, isChild: true,
+                    $"O trecho {FormatSeconds(s.SourceStart)}–{FormatSeconds(s.SourceEnd)} deste vídeo aparece no {compName} " +
+                    $"(em {FormatSeconds(s.ClipStart)}–{FormatSeconds(s.ClipEnd)}{(s.IsMirrored ? ", espelhado" : "")}).");
+                sourceVm.SetContainment("USADO NA COMPILAÇÃO", MediaItemViewModel.ExcerptRoleColor, isChild: true,
                     string.Join("\n", notes), MediaItemViewModel.CompilationColor,
                     source.Segments.Select(s => (s.SourceStart, s.SourceEnd)), source.SourceSeconds);
                 rows.Add(sourceVm);
@@ -695,7 +711,7 @@ public partial class MainViewModel : ObservableObject
             groups.Add(new DuplicateGroupViewModel(new DuplicateGroup(), folder.Path, rows)
             {
                 SetNumber = setNumber++,
-                CustomLabel = $"{compName} was made from parts of {sourceCount} video{(sourceCount == 1 ? "" : "s")}",
+                CustomLabel = $"{compName} foi montado com pedaços de {sourceCount} vídeo{(sourceCount == 1 ? "" : "s")}",
                 Owner = folder,
             });
         }
@@ -816,7 +832,8 @@ public partial class MainViewModel : ObservableObject
         _scanStartUtc = DateTime.UtcNow;
         _containmentByFolder.Clear();
         _containedViewFolders.Clear();
-        var videosOnly = ScanVideosOnly;
+        var videosOnly = ScanMode != ScanModeAll;
+        var withContained = ScanMode == ScanModeVideosContained;
 
         var cancelled = false;
 
@@ -854,7 +871,7 @@ public partial class MainViewModel : ObservableObject
                     // for every enabled folder to complete before showing anything.
                     await RebuildResultsFromMemoryAsync();
 
-                    if (videosOnly)
+                    if (withContained)
                     {
                         IsProgressIndeterminate = true;
                         var analysisProgress = new Progress<string>(message => StatusMessage = message);
@@ -903,7 +920,7 @@ public partial class MainViewModel : ObservableObject
                 StatusMessage = "Scan stopped.";
                 AppLogger.Info(nameof(MainViewModel), nameof(ScanAsync), "Scan stopped by user.");
             }
-            else if (videosOnly)
+            else if (withContained)
             {
                 var all = new ContainmentResult(
                     _containmentByFolder.Values.SelectMany(r => r.Clips).ToList(),
