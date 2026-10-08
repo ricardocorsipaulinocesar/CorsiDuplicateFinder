@@ -134,12 +134,16 @@ public partial class MainViewModel : ObservableObject
     public const string ScanModeVideosContained = "VideosContained";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsScanModeAll), nameof(IsScanModeVideos), nameof(IsScanModeVideosContained))]
+    [NotifyPropertyChangedFor(nameof(IsScanModeAll), nameof(IsScanModeVideos), nameof(IsScanModeVideosContained), nameof(IsSimilarityEnabled))]
     private string _scanMode = ScanModeAll;
 
     public bool IsScanModeAll => ScanMode == ScanModeAll;
     public bool IsScanModeVideos => ScanMode == ScanModeVideos;
     public bool IsScanModeVideosContained => ScanMode == ScanModeVideosContained;
+
+    // Contained compares every video in the folder regardless of similarity, so the slider
+    // has nothing to say in that mode.
+    public bool IsSimilarityEnabled => !IsScanModeVideosContained;
 
     partial void OnScanModeChanged(string value)
     {
