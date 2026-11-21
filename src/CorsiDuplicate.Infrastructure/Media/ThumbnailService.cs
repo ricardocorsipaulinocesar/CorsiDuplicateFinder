@@ -74,14 +74,33 @@ public sealed class ThumbnailService
         return paths;
     }
 
-    private async Task<string?> EnsureFrameAsync(MediaItem item, int index, int count, CancellationToken ct)
-    {
-        var outPath = PathForFrame(item, index, count);
-        if (File.Exists(outPath))
-        {
-            return outPath;
-        }
+    // Every item that shows up in the results asks for its thumbnails at once, which for a big
+    // library used to start thousands of image decodes and ffmpeg processes together and starve
+    // the UI thread. They now queue here, a few at a time, and always run off the UI thread.
+    private static readonly SemaphoreSlim Gate = new(Math.Clamp(Environment.ProcessorCount / 2, 2, 4));
 
+    private Task<string?> EnsureFrameAsync(MediaItem item, int index, int count, CancellationToken ct) =>
+        Task.Run(async () =>
+        {
+            var outPath = PathForFrame(item, index, count);
+            if (File.Exists(outPath))
+            {
+                return outPath;
+            }
+
+            await Gate.WaitAsync(ct);
+            try
+            {
+                return await GenerateFrameAsync(item, index, count, outPath, ct);
+            }
+            finally
+            {
+                Gate.Release();
+            }
+        }, ct);
+
+    private async Task<string?> GenerateFrameAsync(MediaItem item, int index, int count, string outPath, CancellationToken ct)
+    {
         try
         {
             if (item.Kind == MediaKind.Photo)

@@ -70,9 +70,11 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StopScanCommand))]
+    [NotifyPropertyChangedFor(nameof(IsBusy))]
     private bool _isScanning;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
     private string _statusMessage = "Ready.";
 
     // Drives a small "thinking" overlay for any slow filter/results action (currently
@@ -80,6 +82,7 @@ public partial class MainViewModel : ObservableObject
     // moment) — a future slow action can reuse it by setting ProcessingMessage and
     // toggling IsProcessing the same way. Cleared automatically once the action finishes.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBusy))]
     private bool _isProcessing;
 
     [ObservableProperty]
@@ -101,6 +104,7 @@ public partial class MainViewModel : ObservableObject
     // similarity-slider-triggered regroup is running in the background — the
     // async/debounced regroup previously gave no visible sign anything was happening.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBusy), nameof(StatusText))]
     private bool _isRegrouping;
 
     [ObservableProperty]
@@ -112,7 +116,14 @@ public partial class MainViewModel : ObservableObject
     // item's own thumbnail task so the final status message waits for them too, instead of
     // reporting done while images are still visibly popping in one by one.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBusy))]
     private bool _isGeneratingThumbnails;
+
+    // One status line for everything slow: it pulses while any long action runs (scan, regroup,
+    // sort, thumbnails) and shows the regroup message in the same box instead of a second pill.
+    public bool IsBusy => IsScanning || IsRegrouping || IsProcessing || IsGeneratingThumbnails;
+
+    public string StatusText => IsRegrouping ? "Regrouping results..." : StatusMessage;
 
     private readonly List<Task> _pendingThumbnailTasks = new();
 
@@ -1009,7 +1020,7 @@ public partial class MainViewModel : ObservableObject
 
                 try
                 {
-                    var progress = new Progress<ScanProgress>(p =>
+                    var progress = new ThrottledProgress<ScanProgress>(p =>
                     {
                         IsProgressIndeterminate = false;
                         ScanProgressCurrent = p.FilesDone;
@@ -1017,7 +1028,7 @@ public partial class MainViewModel : ObservableObject
                         StatusMessage = p.Phase == "Scanning"
                             ? $"Scanning... {p.FilesDone}/{p.FilesTotal} - {folderDisplayName}{FormatEta(p)}"
                             : $"{p.Phase}... {p.FilesDone}/{p.FilesTotal} - {folderDisplayName}";
-                    });
+                    }, p => p.FilesDone >= p.FilesTotal);
 
                     var items = await _scanPipeline.ScanFolderAsync(folder.Path, progress, _scanCts.Token, videosOnly);
                     FolderManager.RecordScanResult(folder.Path, items.Count);
@@ -1025,7 +1036,7 @@ public partial class MainViewModel : ObservableObject
 
                     // Results appear per folder as each one finishes, instead of waiting
                     // for every enabled folder to complete before showing anything.
-                    await RebuildResultsFromMemoryAsync();
+                    await RebuildResultsFromMemoryAsync(folder.Path);
 
                     if (withContained)
                     {
@@ -1176,9 +1187,24 @@ public partial class MainViewModel : ObservableObject
     /// MediaItemViewModel instances are reused by path so checkbox selection survives
     /// a re-group.
     /// </summary>
-    private async Task RebuildResultsFromMemoryAsync()
+    // A full regroup (slider moved) must not be lost when a single folder finishes scanning
+    // right after it: while one is pending, folder-only refreshes become full ones.
+    private bool _fullRebuildPending;
+
+    /// <summary>Regroups from memory and refreshes the results. With <paramref name="onlyFolder"/>
+    /// only that folder is regrouped and replaced in place (what a finished scan of that folder
+    /// needs); otherwise every folder is rebuilt (the similarity threshold changed).</summary>
+    private async Task RebuildResultsFromMemoryAsync(string? onlyFolder = null)
     {
         var myVersion = Interlocked.Increment(ref _regroupRequestVersion);
+        if (onlyFolder is null)
+        {
+            _fullRebuildPending = true;
+        }
+        else if (_fullRebuildPending)
+        {
+            onlyFolder = null;
+        }
 
         var existingByPath = FolderResults
             .SelectMany(f => f.Groups)
@@ -1187,6 +1213,7 @@ public partial class MainViewModel : ObservableObject
             .ToDictionary(i => i.Model.FullPath);
 
         var snapshot = _scannedItemsByFolder
+            .Where(kv => onlyFolder is null || string.Equals(kv.Key, onlyFolder, StringComparison.OrdinalIgnoreCase))
             .Select(kv => (kv.Key, Items: kv.Value.ToList()))
             .ToList();
         var threshold = SimilarityThreshold;
@@ -1226,26 +1253,16 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        // Reused item view models must not carry a previous "Contained" view's notes into
-        // the freshly grouped Sets.
-        foreach (var item in existingByPath.Values)
-        {
-            item.ClearContainment();
-        }
-
-        FolderResults.Clear();
-
-        foreach (var (folderPath, groups, itemCount) in perFolder)
+        void AddFolder(string folderPath, List<DuplicateGroup> groups, int itemCount, int at)
         {
             var showContained = _containedViewFolders.Contains(folderPath)
                 && _containmentByFolder.TryGetValue(folderPath, out _);
             if (groups.Count == 0 && !showContained)
             {
-                continue;
+                return;
             }
 
             var folderVm = CreateFolderResults(folderPath, itemCount);
-
             var setNumber = 1;
             foreach (var group in groups)
             {
@@ -1256,11 +1273,47 @@ public partial class MainViewModel : ObservableObject
                     .ToList();
                 folderVm.Groups.Add(new DuplicateGroupViewModel(group, folderPath, itemVms) { SetNumber = setNumber++, Owner = folderVm });
             }
-            FolderResults.Add(folderVm);
+            FolderResults.Insert(Math.Min(at, FolderResults.Count), folderVm);
 
             if (showContained)
             {
                 ApplyContainedView(folderVm, _containmentByFolder[folderPath], existingByPath);
+            }
+        }
+
+        if (onlyFolder is null)
+        {
+            _fullRebuildPending = false;
+
+            // Reused item view models must not carry a previous "Contained" view's notes into
+            // the freshly grouped Sets.
+            foreach (var item in existingByPath.Values)
+            {
+                item.ClearContainment();
+            }
+
+            FolderResults.Clear();
+            foreach (var (folderPath, groups, itemCount) in perFolder)
+            {
+                AddFolder(folderPath, groups, itemCount, FolderResults.Count);
+            }
+        }
+        else
+        {
+            // Only this folder changed: the others keep their rows on screen untouched.
+            var index = FolderResults.ToList().FindIndex(f => string.Equals(f.Path, onlyFolder, StringComparison.OrdinalIgnoreCase));
+            if (index >= 0)
+            {
+                foreach (var item in FolderResults[index].Groups.SelectMany(g => g.Items).Distinct())
+                {
+                    item.ClearContainment();
+                }
+                FolderResults.RemoveAt(index);
+            }
+
+            foreach (var (folderPath, groups, itemCount) in perFolder)
+            {
+                AddFolder(folderPath, groups, itemCount, index >= 0 ? index : FolderResults.Count);
             }
         }
 
@@ -1307,7 +1360,10 @@ public partial class MainViewModel : ObservableObject
             }
 
             var finished = Interlocked.Increment(ref done);
-            StatusMessage = $"Generating thumbnails... {finished}/{total}";
+            if (finished == total || finished % 10 == 0)
+            {
+                StatusMessage = $"Generating thumbnails... {finished}/{total}";
+            }
         }));
 
         IsGeneratingThumbnails = false;
@@ -1515,6 +1571,15 @@ public sealed partial class FolderResultsViewModel : ObservableObject
     public int FileCount { get; }
     public ObservableCollection<DuplicateGroupViewModel> Groups { get; } = new();
 
+    // What the folder actually shows: the Sets are handed to the UI a few at a time, so opening
+    // a folder with hundreds of Sets doesn't freeze the window while every grid is built. It is
+    // empty while the folder is collapsed.
+    public ObservableCollection<DuplicateGroupViewModel> VisibleGroups { get; } = new();
+
+    private const int FillBatch = 6;
+    private bool _filling;
+    private bool _needsReset;
+
     public event Action<bool>? ExpandedChanged;
 
     [ObservableProperty]
@@ -1532,9 +1597,84 @@ public sealed partial class FolderResultsViewModel : ObservableObject
     {
         Path = path;
         FileCount = fileCount;
+        Groups.CollectionChanged += OnGroupsChanged;
     }
 
-    partial void OnIsExpandedChanged(bool value) => ExpandedChanged?.Invoke(value);
+    partial void OnIsExpandedChanged(bool value)
+    {
+        ExpandedChanged?.Invoke(value);
+        if (value)
+        {
+            StartFill();
+        }
+        else
+        {
+            VisibleGroups.Clear();
+        }
+    }
+
+    private void OnGroupsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        switch (e.Action)
+        {
+            case System.Collections.Specialized.NotifyCollectionChangedAction.Add
+                when e.NewItems is not null && e.NewStartingIndex + e.NewItems.Count == Groups.Count:
+                break; // appended at the end: the fill loop picks it up
+            case System.Collections.Specialized.NotifyCollectionChangedAction.Remove when e.OldItems is not null:
+                foreach (DuplicateGroupViewModel group in e.OldItems)
+                {
+                    VisibleGroups.Remove(group);
+                }
+                break;
+            default:
+                _needsReset = true;
+                break;
+        }
+
+        if (IsExpanded)
+        {
+            StartFill();
+        }
+    }
+
+    private async void StartFill()
+    {
+        if (_filling)
+        {
+            return;
+        }
+
+        _filling = true;
+        try
+        {
+            while (IsExpanded)
+            {
+                if (_needsReset)
+                {
+                    VisibleGroups.Clear();
+                    _needsReset = false;
+                }
+
+                var added = 0;
+                while (VisibleGroups.Count < Groups.Count && added < FillBatch)
+                {
+                    VisibleGroups.Add(Groups[VisibleGroups.Count]);
+                    added++;
+                }
+
+                if (VisibleGroups.Count >= Groups.Count && !_needsReset)
+                {
+                    break;
+                }
+
+                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
+            }
+        }
+        finally
+        {
+            _filling = false;
+        }
+    }
 
     [RelayCommand]
     private void ToggleExpanded() => IsExpanded = !IsExpanded;

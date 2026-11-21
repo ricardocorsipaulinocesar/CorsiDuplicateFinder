@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup – ícones mais claros</title>
+<style>
+:root{--page:#0f1115;--text:#E8EAEF;--muted:#9AA1AD;--card:#1a1d24;--font:"Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--text);font-family:var(--font);font-size:14px;padding:24px 20px 60px;max-width:1000px;margin-inline:auto}
+h1{font-size:20px;font-weight:600;margin:0 0 4px}
+h2{font-size:16px;font-weight:600;margin:32px 0 4px;padding-top:12px;border-top:1px solid #2a2f3a}
+.sub{color:var(--muted);margin:0 0 12px}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.opt{background:var(--card);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.opt b{font-size:13px}
+.opt small{color:var(--muted);font-size:12px;line-height:1.4}
+.pair{display:flex;gap:8px}
+.ib{width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,#242d3a,#181f28);border:1px solid rgba(255,255,255,.11);box-shadow:2px 2px 0 rgba(5,8,12,.6),-1px -1px 0 rgba(56,70,88,.28);display:inline-flex;align-items:center;justify-content:center;position:relative;flex:none}
+.ib svg{width:22px;height:22px;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.ib text{font:700 9px "Segoe UI",sans-serif;fill:currentColor;stroke:none}
+.cur{opacity:.7}
+.tag{font-size:10px;font-weight:700;color:#9AA1AD;letter-spacing:.06em}
+.hint{font-size:11.5px;color:#3FCA80}
+</style>
+</head>
+<body>
+<h1>Ícones mais fáceis de entender</h1>
+<p class="sub">Para cada botão, o ícone atual e três alternativas. Passe os olhos pelo nome e pela dica de cada uma.</p>
+
+<h2>1. Limpar resultados</h2>
+<p class="sub">Tira os conjuntos da tela, sem refazer o scan e sem apagar arquivos.</p>
+<div class="row" id="clean"></div>
+
+<h2>2. Miniaturas por vídeo</h2>
+<p class="sub">Abre o menu que escolhe quantas miniaturas cada vídeo mostra.</p>
+<div class="row" id="thumbs"></div>
+
+<h2>3. Qualidade alta e baixa</h2>
+<p class="sub">Alta: em cada conjunto, desmarca só a melhor cópia. Baixa: desmarca só a pior cópia.</p>
+<div class="row" id="quality"></div>
+
+<script>
+const ink = {blue:'#85A8F0',cyan:'#67CFE4',green:'#67E4A6',red:'#E47067',pink:'#E467A6',amber:'#E4BB67',violet:'#9567E4'};
+const rect=(x,y,w,h,r)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}"/>`;
+const svg=(body,c)=>`<svg viewBox="0 0 24 24" stroke="${c}" style="color:${c}">${body}</svg>`;
+const tile=(body,c)=>`<span class="ib">${svg(body,c)}</span>`;
+const thumbUp='<path d="M7 11V20H4V11Z M7 11L11 4a2 2 0 0 1 3 2L13.5 9H19a2 2 0 0 1 2 2.3L19.7 18a2 2 0 0 1-2 2H7"/>';
+const thumbDown='<g transform="translate(0 24) scale(1 -1)"><path d="M7 11V20H4V11Z M7 11L11 4a2 2 0 0 1 3 2L13.5 9H19a2 2 0 0 1 2 2.3L19.7 18a2 2 0 0 1-2 2H7"/></g>';
+const card=(name,desc,html)=>`<div class="opt"><b>${name}</b><div class="pair">${html}</div><small>${desc}</small></div>`;
+
+document.getElementById('clean').innerHTML=[
+ card('Atual','Retângulo com X (parece fechar uma janela).',tile(rect(4,6,16,12,2)+'<path d="M9.5 9.5l5 5M14.5 9.5l-5 5"/>',ink.cyan).replace('class="ib"','class="ib cur"')),
+ card('A. Vassoura','Varre os resultados da tela. Dica: "Clear results: sweep every set off the screen".',tile('<path d="M14 4L10.5 12M7.5 12H16.5L19 20H5Z M9 16L8.3 20M12 16V20M15 16L15.7 20"/>',ink.cyan)),
+ card('B. Borracha','Apaga da tela, sem tocar nos arquivos. Dica: "Clear results (files are not deleted)".',tile('<path d="M5 15L14 6L19 11L10 20H6Z M11 9L16 14M10 20H20"/>',ink.cyan)),
+ card('C. Lista com X','Esvazia a lista de conjuntos. Dica: "Clear the list of sets".',tile('<path d="M4 7H14M4 12H11M4 17H14M16 11L21 16M21 11L16 16"/>',ink.cyan))
+].join('');
+
+document.getElementById('thumbs').innerHTML=[
+ card('Atual','Câmera (parece "tirar foto").',tile('<path d="M3 8v10"/>'+rect(3,6,18,14,2)+'<path d="M8 6l1.5-2.5h5L16 6"/><circle cx="12" cy="13" r="3.5"/>',ink.pink).replace('class="ib"','class="ib cur"')),
+ card('A. Grade de imagens','Quatro quadradinhos: várias miniaturas. Dica: "Thumbnails per video".',tile(rect(4,4,7,7,1.5)+rect(13,4,7,7,1.5)+rect(4,13,7,7,1.5)+rect(13,13,7,7,1.5),ink.pink)),
+ card('B. Tira de filme','Quadros de um vídeo em sequência. Dica: "Thumbnails per video".',tile(rect(3,5,18,14,2)+'<path d="M8 5V19M16 5V19M3 9H8M3 15H8M16 9H21M16 15H21"/>',ink.pink)),
+ card('C. Imagens empilhadas','Várias imagens de um mesmo vídeo. Dica: "Thumbnails per video".',tile('<path d="M5 8H3V19H16V17"/>'+rect(7,3,14,12,2)+'<path d="M7 12l4-4 4 4 2-2 4 4"/>',ink.pink))
+].join('');
+
+const bars=(on)=>[4,9,14,19].map((x,i)=>`<path d="M${x} 20V${16-i*4}" opacity="${i<on?1:.28}"/>`).join('');
+document.getElementById('quality').innerHTML=[
+ card('Atual','Seta para cima / para baixo (não diz que é qualidade).',tile('<path d="M12 19V5M6 11l6-6 6 6"/>',ink.green).replace('class="ib"','class="ib cur"')+tile('<path d="M12 5v14M6 13l6 6 6-6"/>',ink.red).replace('class="ib"','class="ib cur"')),
+ card('A. HD / SD','Rótulo direto. Alta = HD (verde), Baixa = SD (vermelho). Dica: "Keep the best copy" / "Keep the worst copy".',
+   `<span class="ib">${svg(rect(3,6,18,12,2)+'<text x="12" y="14.4" text-anchor="middle" style="fill:'+ink.green+'">HD</text>',ink.green)}</span><span class="ib">${svg(rect(3,6,18,12,2)+'<text x="12" y="14.4" text-anchor="middle" style="fill:'+ink.red+'">SD</text>',ink.red)}</span>`),
+ card('B. Barras de sinal','Cheia = qualidade alta; quase vazia = baixa. Dica: "Keep the best copy" / "Keep the worst copy".',tile(bars(4),ink.green)+tile(bars(1),ink.red)),
+ card('C. Joinha','Joinha para cima = melhor cópia; para baixo = pior cópia. Dica: "Keep the best copy" / "Keep the worst copy".',tile(thumbUp,ink.green)+tile(thumbDown,ink.red))
+].join('');
+</script>
+</body>
+</html>

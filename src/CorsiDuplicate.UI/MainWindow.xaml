@@ -15,6 +15,7 @@
       <ResourceDictionary>
         <ResourceDictionary.MergedDictionaries>
             <ResourceDictionary Source="Resources/Icons.xaml"/>
+            <ResourceDictionary Source="Resources/ScrollBars.xaml"/>
         </ResourceDictionary.MergedDictionaries>
         <!-- Dark theme palette -->
         <SolidColorBrush x:Key="BgApp" Color="#15171C"/>
@@ -388,41 +389,7 @@
                                    Width="34" Margin="6,0,0,0" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Border>
-                <!-- Regroup-in-progress: the similarity slider triggers a background
-                     re-group (can involve heavy ORB structural matching) that previously
-                     gave no visible sign anything was happening. Shown only while that's
-                     running, and clears itself automatically. -->
-                <Border Background="{StaticResource AccentSoft}" BorderBrush="{StaticResource Accent}" BorderThickness="1"
-                        CornerRadius="20" Padding="10,5" Margin="8,0,0,0"
-                        Visibility="{Binding IsRegrouping, Converter={StaticResource BoolToVis}}">
-                    <StackPanel Orientation="Horizontal">
-                        <Ellipse Width="7" Height="7" Fill="{StaticResource AccentStrong}" VerticalAlignment="Center" Margin="0,0,7,0">
-                            <Ellipse.Style>
-                                <Style TargetType="Ellipse">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsRegrouping}" Value="True">
-                                            <DataTrigger.EnterActions>
-                                                <BeginStoryboard x:Name="RegroupPulseStoryboard">
-                                                    <Storyboard RepeatBehavior="Forever" AutoReverse="True">
-                                                        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1.0" To="0.3" Duration="0:0:0.5"/>
-                                                    </Storyboard>
-                                                </BeginStoryboard>
-                                            </DataTrigger.EnterActions>
-                                            <DataTrigger.ExitActions>
-                                                <StopStoryboard BeginStoryboardName="RegroupPulseStoryboard"/>
-                                            </DataTrigger.ExitActions>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Ellipse.Style>
-                        </Ellipse>
-                        <TextBlock Text="Regrouping results..." FontSize="11.5" FontWeight="Bold" Foreground="{StaticResource AccentStrong}" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Border>
-
-                <Border Width="1" Background="{StaticResource Border}" Margin="10,2"/>
-
-                <!-- Status: pulses bold/green while a scan is actively running, so the
+                <!-- Status: pulses bold/green while anything slow is running (scan, regroup, sort, thumbnails), so the
                      app visibly reads as "working" instead of looking identical to any
                      other status message; reverts to the normal muted style once
                      finished/stopped. -->
@@ -433,7 +400,7 @@
                     <StackPanel.Style>
                         <Style TargetType="StackPanel">
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsScanning}" Value="True">
+                                <DataTrigger Binding="{Binding IsBusy}" Value="True">
                                     <DataTrigger.EnterActions>
                                         <BeginStoryboard x:Name="StatusPulseStoryboard">
                                             <Storyboard RepeatBehavior="Forever" AutoReverse="True">
@@ -450,15 +417,15 @@
                     </StackPanel.Style>
 
                     <Ellipse Width="7" Height="7" Fill="{StaticResource Success}" VerticalAlignment="Center" Margin="0,0,7,0"
-                             Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"/>
+                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
 
-                    <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
                                 <Setter Property="FontWeight" Value="Bold"/>
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsScanning}" Value="True">
+                                    <DataTrigger Binding="{Binding IsBusy}" Value="True">
                                         <Setter Property="Foreground" Value="{StaticResource Success}"/>
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -487,15 +454,15 @@
                                 ToolTip="Folders: open the list to add, enable or remove folders"/>
 
                         <Border Width="1" Background="{StaticResource Border}" Margin="12,2" Height="20"/>
-                        <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.Up}" Foreground="{StaticResource Ink.Green}"
+                        <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.QualityHigh}" Foreground="{StaticResource Ink.Green}"
                                 Command="{Binding ApplyHighQualityToAllCommand}"
                                 ToolTip="High quality: in every duplicate set across every folder, keep only the best copy unchecked"/>
-                        <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.Down}" Foreground="{StaticResource Ink.Red}" Margin="6,0,0,0"
+                        <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.QualityLow}" Foreground="{StaticResource Ink.Red}" Margin="6,0,0,0"
                                 Command="{Binding ApplyLowQualityToAllCommand}"
                                 ToolTip="Low quality: in every duplicate set across every folder, keep only the worst copy unchecked"/>
 
                         <Border Width="1" Background="{StaticResource Border}" Margin="12,2" Height="20"/>
-                        <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.Clean}" Foreground="{StaticResource Ink.Cyan}"
+                        <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.ListClear}" Foreground="{StaticResource Ink.Cyan}"
                                 Command="{Binding ClearResultsCommand}"
                                 ToolTip="Clean results: clear every duplicate set currently shown, without re-scanning"/>
                         <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.Collapse}" Foreground="{StaticResource Ink.Blue}" Margin="6,0,0,0"
@@ -504,7 +471,7 @@
 
                         <Border Width="1" Background="{StaticResource Border}" Margin="10,2" Height="20"/>
                         <Grid>
-                            <Button x:Name="ThumbnailsMenuButton" Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.Thumbs}" Foreground="{StaticResource Ink.Pink}"
+                            <Button x:Name="ThumbnailsMenuButton" Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.Film}" Foreground="{StaticResource Ink.Pink}"
                                     Command="{Binding ToggleThumbnailsMenuCommand}"
                                     ToolTip="{Binding ThumbnailsPerVideo, StringFormat=Thumbnails per video: {0} (click to change)}"/>
                             <Popup IsOpen="{Binding IsThumbnailsMenuOpen}" StaysOpen="False" AllowsTransparency="True"
@@ -627,16 +594,7 @@
                                     <StackPanel Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}" Margin="10,10,10,10">
                                         <!-- The Sets are only built while the folder is expanded: a collapsed folder
                                              used to create every Set's grid and rows anyway (just hidden). -->
-                                        <ItemsControl>
-                                            <ItemsControl.Style>
-                                                <Style TargetType="ItemsControl">
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsExpanded}" Value="True">
-                                                            <Setter Property="ItemsSource" Value="{Binding Groups}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </ItemsControl.Style>
+                                        <ItemsControl ItemsSource="{Binding VisibleGroups}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
                                                     <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="8" Margin="0,0,0,10">
