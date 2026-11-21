@@ -898,14 +898,10 @@
                     <TextBlock FontWeight="Black" FontSize="15" Foreground="{StaticResource AccentStrong}" Text="{Binding Selection.TotalSelectedDisplay}"/>
                     <TextBlock Text=" total size" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Bottom" Margin="4,0,0,1"/>
                 </StackPanel>
-                <Button Grid.Column="1" Style="{StaticResource PillDelete}" Margin="0,0,64,0"
+                <Button Grid.Column="1" Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.Trash}" Foreground="{StaticResource Ink.Red}"
                         Command="{Binding DeleteSelectedCommand}"
                         IsEnabled="{Binding Selection.HasSelection}"
-                        ToolTip="Move every checked file to the Recycle Bin">
-                    <TextBlock>
-                        <Run Text="Mover para a Lixeira"/><Run Text=" ("/><Run Text="{Binding Selection.TotalSelectedDisplay, Mode=OneWay}"/><Run Text=")"/>
-                    </TextBlock>
-                </Button>
+                        ToolTip="Move every checked file to the Recycle Bin"/>
             </Grid>
         </Border>
 
@@ -930,9 +926,6 @@
                 </StackPanel>
             </Border>
         </Border>
-        <TextBlock Grid.Row="4" Text="{Binding AppVersion}" HorizontalAlignment="Right" VerticalAlignment="Center"
-                   Margin="0,0,16,0" FontSize="10.5" Opacity="0.75" Foreground="{StaticResource TextMuted}"
-                   ToolTip="App version"/>
 
         <!-- Managed folders: full-screen overlay. Covers every row so it sits above the
              whole window; clicking the dark backdrop closes it, clicking the sheet itself
