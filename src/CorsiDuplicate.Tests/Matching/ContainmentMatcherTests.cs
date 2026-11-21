@@ -123,6 +123,45 @@ public class ContainmentMatcherTests
     }
 
     [Fact]
+    public void The_same_footage_re_encoded_shares_almost_all_scenes()
+    {
+        var source = RandomVideo(120, seed: 20);
+        var recompressed = Excerpt(source, start: 0, length: 120, seed: 21);
+
+        Assert.True(ContainmentMatcher.SharedScenesPercent(source, recompressed) >= 90);
+    }
+
+    [Fact]
+    public void Different_videos_share_no_scenes()
+    {
+        Assert.True(ContainmentMatcher.SharedScenesPercent(RandomVideo(120, seed: 22), RandomVideo(120, seed: 23)) < 10);
+    }
+
+    [Fact]
+    public void A_few_look_alike_frames_do_not_make_videos_similar()
+    {
+        // Two different videos that happen to share 3 seconds (an intro, a still shot).
+        var first = RandomVideo(120, seed: 24);
+        var secondHashes = RandomVideo(120, seed: 25).Hashes.ToArray();
+        for (var i = 0; i < 3; i++)
+        {
+            secondHashes[40 + i] = first.Hashes[10 + i];
+        }
+        var second = new VideoFingerprint(secondHashes, Enumerable.Repeat(true, 120).ToArray());
+
+        Assert.Equal(0, ContainmentMatcher.SharedScenesPercent(first, second));
+    }
+
+    [Fact]
+    public void A_half_length_copy_scores_about_half()
+    {
+        var source = RandomVideo(120, seed: 26);
+        var half = Excerpt(source, start: 30, length: 60, seed: 27);
+
+        Assert.InRange(ContainmentMatcher.SharedScenesPercent(source, half), 40, 55);
+    }
+
+    [Fact]
     public void A_near_full_length_copy_is_left_to_duplicate_detection()
     {
         var source = RandomVideo(100, seed: 8);

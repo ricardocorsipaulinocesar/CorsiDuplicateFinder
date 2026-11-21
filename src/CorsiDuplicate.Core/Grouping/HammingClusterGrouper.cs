@@ -54,6 +54,9 @@ public sealed class HammingClusterGrouper : IGroupingStrategy
             var reference = items[refIndex];
             var memberIndices = new List<int> { refIndex };
 
+            // Scores computed while looking for members are kept, so a member's displayed
+            // match percentage doesn't need a second (and for ORB, costly) comparison.
+            var scores = new Dictionary<int, double>();
             foreach (var candidateIndex in order)
             {
                 if (candidateIndex == refIndex || assigned[candidateIndex])
@@ -61,9 +64,11 @@ public sealed class HammingClusterGrouper : IGroupingStrategy
                     continue;
                 }
 
-                if (Similarity(items[candidateIndex], reference) >= thresholdPercent)
+                var similarity = Similarity(items[candidateIndex], reference);
+                if (similarity >= thresholdPercent)
                 {
                     memberIndices.Add(candidateIndex);
+                    scores[candidateIndex] = similarity;
                 }
             }
 
@@ -79,9 +84,7 @@ public sealed class HammingClusterGrouper : IGroupingStrategy
             foreach (var i in memberIndices)
             {
                 assigned[i] = true;
-                items[i].SimilarityToReferencePercent = ReferenceEquals(items[i], reference)
-                    ? 100.0
-                    : Similarity(items[i], reference);
+                items[i].SimilarityToReferencePercent = i == refIndex ? 100.0 : scores[i];
             }
 
             var group = new DuplicateGroup { Reference = reference };

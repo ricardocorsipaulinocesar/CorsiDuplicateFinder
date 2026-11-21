@@ -8,7 +8,7 @@ using CorsiDuplicate.Infrastructure.Persons;
 
 namespace CorsiDuplicate.Infrastructure.Scanning;
 
-public sealed record ScanProgress(int FilesDone, int FilesTotal);
+public sealed record ScanProgress(int FilesDone, int FilesTotal, string Phase = "Scanning");
 
 public sealed class ScanPipeline : IDisposable
 {
@@ -21,6 +21,12 @@ public sealed class ScanPipeline : IDisposable
     private readonly OpenCvFaceRecognizer _faceRecognizer = new();
     private readonly HogPersonDetector _personDetector = new();
     private readonly SqlitePersonClusterStore _personClusterStore = new();
+    private readonly VideoFingerprintCache _fingerprintCache = new();
+
+    // Videos are only compared scene by scene when the cheap 5-frame check finds a plausible
+    // look-alike. A best-of-25 frame pair of two unrelated videos already reaches ~62%, so the
+    // bar sits well above that.
+    private const double SceneCandidateFloorPercent = 72.0;
 
     public void Dispose()
     {
@@ -47,6 +53,7 @@ public sealed class ScanPipeline : IDisposable
             var c = _cache.Load(folderPath);
             return (f, c);
         }, cancellationToken);
+        var collidingSizes = await Task.Run(() => FindCollidingSizes(files), cancellationToken);
         var results = new MediaItem?[files.Count];
         var done = 0;
 
@@ -74,7 +81,7 @@ public sealed class ScanPipeline : IDisposable
                 var (path, kind) = files[i];
                 results[i] = await ExtractOrLogAsync(
                     path, kind, cached, ct, _imageReader, _histogramComparer, _videoMetadataReader, _frameExtractor,
-                    _faceRecognizer, _personDetector, _personClusterStore, folderPath);
+                    _faceRecognizer, _personDetector, _personClusterStore, folderPath, collidingSizes);
                 var d = Interlocked.Increment(ref done);
                 progress?.Report(new ScanProgress(d, files.Count));
             });
@@ -91,12 +98,13 @@ public sealed class ScanPipeline : IDisposable
                 var (path, kind) = files[i];
                 results[i] = await ExtractOrLogAsync(
                     path, kind, cached, ct, _imageReader, _histogramComparer, _videoMetadataReader, _frameExtractor,
-                    _faceRecognizer, _personDetector, _personClusterStore, folderPath);
+                    _faceRecognizer, _personDetector, _personClusterStore, folderPath, collidingSizes);
                 var d = Interlocked.Increment(ref done);
                 progress?.Report(new ScanProgress(d, files.Count));
             });
 
         var items = results.Where(r => r is not null).Select(r => r!).ToList();
+        await AttachSceneFingerprintsAsync(items, folderPath, progress, cancellationToken);
         // A videos-only scan keeps the folder's cached photo entries, so switching back to
         // "All" doesn't re-extract every photo.
         var keptPhotos = videosOnly
@@ -118,13 +126,13 @@ public sealed class ScanPipeline : IDisposable
         ImageMetadataReader imageReader, HsvHistogramComparer histogramComparer,
         FfProbeMetadataReader videoMetadataReader, FfmpegFrameExtractor frameExtractor,
         OpenCvFaceRecognizer faceRecognizer, HogPersonDetector personDetector,
-        SqlitePersonClusterStore personClusterStore, string folderPath)
+        SqlitePersonClusterStore personClusterStore, string folderPath, HashSet<long> collidingSizes)
     {
         try
         {
             return await ExtractAsync(
                 path, kind, cached, ct, imageReader, histogramComparer, videoMetadataReader, frameExtractor,
-                faceRecognizer, personDetector, personClusterStore, folderPath);
+                faceRecognizer, personDetector, personClusterStore, folderPath, collidingSizes);
         }
         catch (OperationCanceledException)
         {
@@ -142,7 +150,7 @@ public sealed class ScanPipeline : IDisposable
         ImageMetadataReader imageReader, HsvHistogramComparer histogramComparer,
         FfProbeMetadataReader videoMetadataReader, FfmpegFrameExtractor frameExtractor,
         OpenCvFaceRecognizer faceRecognizer, HogPersonDetector personDetector,
-        SqlitePersonClusterStore personClusterStore, string folderPath)
+        SqlitePersonClusterStore personClusterStore, string folderPath, HashSet<long> collidingSizes)
     {
         FileInfo info;
         try
@@ -164,6 +172,13 @@ public sealed class ScanPipeline : IDisposable
         if (cached.TryGetValue(key, out var hit))
         {
             var cachedItem = hit.ToMediaItem();
+            if (cachedItem.HasQuickHash && collidingSizes.Contains(info.Length)
+                && await TryFullHashAsync(path, ct) is { } fullHash)
+            {
+                // Another file of the same size has appeared since this one was cached.
+                cachedItem.Sha256 = fullHash;
+            }
+
             // The person-cluster library keeps learning every scan, even for
             // otherwise-unchanged files, using the embeddings already cached —
             // no need to re-run the (expensive) face/body detection itself.
@@ -171,18 +186,12 @@ public sealed class ScanPipeline : IDisposable
             return cachedItem;
         }
 
-        string sha256;
-        try
-        {
-            await using var stream = File.OpenRead(path);
-            var hashBytes = await SHA256.HashDataAsync(stream, ct);
-            sha256 = Convert.ToHexString(hashBytes);
-        }
-        catch (IOException)
-        {
-            return null;
-        }
-        catch (UnauthorizedAccessException)
+        // Only a file that shares its size with another one in the folder can be a byte-for-byte
+        // copy, so only those are read in full; the rest get a quick hash of their ends.
+        var sha256 = collidingSizes.Contains(info.Length)
+            ? await TryFullHashAsync(path, ct)
+            : await TryQuickHashAsync(path, info.Length, ct);
+        if (sha256 is null)
         {
             return null;
         }
@@ -289,6 +298,137 @@ public sealed class ScanPipeline : IDisposable
 
         ResolveClusters(item, folderPath, personClusterStore);
         return item;
+    }
+
+    private static HashSet<long> FindCollidingSizes(IEnumerable<(string Path, MediaKind Kind)> files)
+    {
+        var seen = new HashSet<long>();
+        var colliding = new HashSet<long>();
+        foreach (var (path, _) in files)
+        {
+            try
+            {
+                var length = new FileInfo(path).Length;
+                if (!seen.Add(length))
+                {
+                    colliding.Add(length);
+                }
+            }
+            catch (IOException)
+            {
+                // Unreadable now; the extraction step skips it too.
+            }
+        }
+        return colliding;
+    }
+
+    private static async Task<string?> TryFullHashAsync(string path, CancellationToken ct)
+    {
+        try
+        {
+            await using var stream = File.OpenRead(path);
+            return Convert.ToHexString(await SHA256.HashDataAsync(stream, ct));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>"Q" + 63 hex characters from the file size and its first and last 64 KB. "Q" is not
+    /// a hex digit, so a quick hash can never equal a full SHA-256.</summary>
+    private static async Task<string?> TryQuickHashAsync(string path, long length, CancellationToken ct)
+    {
+        const int chunk = 64 * 1024;
+        try
+        {
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            hash.AppendData(BitConverter.GetBytes(length));
+            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+            var buffer = new byte[chunk];
+
+            var read = await stream.ReadAsync(buffer.AsMemory(), ct);
+            hash.AppendData(buffer, 0, read);
+            if (length > chunk)
+            {
+                stream.Position = Math.Max(chunk, length - chunk);
+                read = await stream.ReadAsync(buffer.AsMemory(), ct);
+                hash.AppendData(buffer, 0, read);
+            }
+            return "Q" + Convert.ToHexString(hash.GetHashAndReset())[..63];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Gives every video that might have a look-alike its scene sequence (one hash per second,
+    /// cached on disk) so grouping judges videos by their scenes, not by one lucky frame. The
+    /// cheap 5-frame check nominates the candidates; all other videos are marked as checked
+    /// without a sequence, meaning "nothing like them here".
+    /// </summary>
+    private async Task AttachSceneFingerprintsAsync(
+        List<MediaItem> items, string folderPath, IProgress<ScanProgress>? progress, CancellationToken ct)
+    {
+        var videos = items.Where(i => i.Kind == MediaKind.Video && i.FrameOrientationHashes is { Count: > 0 }).ToList();
+        if (videos.Count < 2)
+        {
+            foreach (var video in videos)
+            {
+                video.SceneCheckDone = true;
+            }
+            return;
+        }
+
+        var nominated = new bool[videos.Count];
+        await Task.Run(() => Parallel.For(0, videos.Count, new ParallelOptions { CancellationToken = ct }, a =>
+        {
+            for (var b = a + 1; b < videos.Count; b++)
+            {
+                if (nominated[a] && nominated[b])
+                {
+                    continue;
+                }
+
+                // Exact copies are already 100% by hash; no scenes to compare.
+                if (videos[a].Sha256 != videos[b].Sha256
+                    && Core.Hashing.HammingDistance.BestFramePairSimilarityPercent(
+                        videos[a].FrameOrientationHashes!, videos[b].FrameOrientationHashes!) >= SceneCandidateFloorPercent)
+                {
+                    nominated[a] = true;
+                    nominated[b] = true;
+                }
+            }
+        }), ct);
+
+        var candidates = Enumerable.Range(0, videos.Count).Where(i => nominated[i]).Select(i => videos[i]).ToList();
+        AppLogger.Info(nameof(ScanPipeline), nameof(AttachSceneFingerprintsAsync),
+            $"'{folderPath}': {candidates.Count} of {videos.Count} video(s) need a scene comparison.");
+
+        var done = 0;
+        await Parallel.ForEachAsync(candidates,
+            new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4), CancellationToken = ct },
+            async (video, token) =>
+            {
+                try
+                {
+                    video.SceneFingerprint = await _fingerprintCache.GetOrCreateAsync(video, token);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    AppLogger.Error(nameof(ScanPipeline), nameof(AttachSceneFingerprintsAsync),
+                        $"Could not fingerprint '{video.FullPath}'.", ex);
+                }
+
+                progress?.Report(new ScanProgress(Interlocked.Increment(ref done), candidates.Count, "Comparing video scenes"));
+            });
+
+        foreach (var video in videos)
+        {
+            video.SceneCheckDone = true;
+        }
     }
 
     private static void ResolveClusters(MediaItem item, string folderPath, SqlitePersonClusterStore store)

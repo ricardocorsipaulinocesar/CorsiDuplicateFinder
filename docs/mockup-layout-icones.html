@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup – layout com ícones</title>
+<style>
+:root{--page:#0f1115;--text:#E8EAEF;--muted:#9AA1AD;--card:#1a1d24;--font:"Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--text);font-family:var(--font);font-size:14px;padding:24px 20px 60px;max-width:1180px;margin-inline:auto}
+h1{font-size:20px;font-weight:600;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 8px}
+.lbl{font-size:14px;font-weight:600;margin:28px 0 8px}
+.win{background:#15171C;border:1px solid #333844;border-radius:10px;color:#E8EAEF;font-size:12px}
+.tb{background:#1E2128;border-bottom:1px solid #333844;padding:8px 10px;display:flex;align-items:center;gap:6px;border-radius:10px 10px 0 0}
+.tb2{background:#1E2128;border-bottom:1px solid #333844;padding:6px 10px;display:flex;align-items:center;gap:6px}
+.ib{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#242d3a,#181f28);border:1px solid rgba(255,255,255,.11);box-shadow:2px 2px 0 rgba(5,8,12,.6),-1px -1px 0 rgba(56,70,88,.28);display:inline-flex;align-items:center;justify-content:center;position:relative;cursor:pointer;flex:none}
+.ib.s{width:26px;height:26px;border-radius:7px}
+.ib svg{width:18px;height:18px;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ib.s svg{width:14px;height:14px}
+.ib.on{border-color:#8CAAF5;background:linear-gradient(135deg,#2c3f6b,#1d2a4a)}
+.ib.pri{background:linear-gradient(135deg,#2f5f8a,#1b3a55)}
+[data-tip]{position:relative}
+[data-tip]::after{content:attr(data-tip);position:absolute;top:calc(100% + 7px);left:50%;transform:translateX(-50%);background:#0d0f13;border:1px solid #454C5B;color:#E8EAEF;padding:4px 8px;border-radius:6px;font-size:11px;white-space:nowrap;opacity:0;pointer-events:none;z-index:30;transition:opacity .12s}
+[data-tip]:hover::after{opacity:1}
+[data-tip].r::after{left:auto;right:0;transform:none}
+[data-tip].ri::after{top:50%;left:calc(100% + 8px);transform:translateY(-50%)}
+.sp{width:1px;height:20px;background:#333844;margin:0 4px;flex:none}
+.seg{display:inline-flex;gap:4px}
+.sim{display:inline-flex;align-items:center;gap:6px;flex:none}
+.sim svg{width:16px;height:16px;fill:none;stroke-width:1.8;stroke-linecap:round}
+.sl{height:4px;background:#333844;border-radius:2px;position:relative;display:inline-block}
+.sl i{position:absolute;left:0;top:0;bottom:0;width:75%;background:#6690F2;border-radius:2px}
+.sl i::after{content:"";position:absolute;right:-5px;top:-4px;width:12px;height:12px;border-radius:50%;background:#8CAAF5}
+.sim b{color:#8CAAF5;font-size:12px;width:30px}
+.st{flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:#252932;border:1px solid #333844;border-radius:7px;padding:6px 10px}
+.st u{width:7px;height:7px;border-radius:50%;background:#3FCA80;flex:none}
+.st b{font-size:10px;color:#9AA1AD;flex:none}
+.st em{font-style:normal;font-weight:700;color:#3FCA80;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr{height:3px;background:#333844}.pr i{display:block;height:3px;width:35%;background:#6690F2}
+.fl{flex:1}
+.rs{padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.fh{display:flex;align-items:center;gap:8px;background:#252932;border:1px solid #333844;border-radius:7px;padding:5px 8px}
+.fh .m{color:#9AA1AD;font-size:11px}
+.chips{display:flex;gap:4px;margin-left:auto}
+.gh{font-size:12px;font-weight:700;padding:2px}
+.rw{display:flex;gap:8px;background:#1E2128;border:1px solid #333844;border-radius:7px;padding:6px;align-items:center}
+.rw.ch{margin-left:20px;border-left:2px solid #454C5B;border-radius:0 7px 7px 0}
+.th{width:44px;height:30px;border-radius:5px;background:#333844;flex:none}
+.tg{display:inline-block;font-size:9px;font-weight:700;padding:1px 7px;border-radius:9px;margin-right:6px}
+.o{background:#7F77DD;color:#fff}.d{background:#1D9E75;color:#fff}
+.rw small{display:block;color:#9AA1AD;font-size:11px}
+.sb{display:flex;justify-content:space-between;padding:5px 10px;border-top:1px solid #333844;color:#9AA1AD;font-size:11px;background:#1E2128;border-radius:0 0 10px 10px}
+.rail{width:48px;background:#1E2128;border-right:1px solid #333844;display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0;border-radius:10px 0 0 10px}
+.rail .hs{width:22px;height:1px;background:#333844;margin:2px 0}
+.cw{display:flex}.cm{flex:1;min-width:0;display:flex;flex-direction:column}
+.lg{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:8px}
+.li{display:flex;gap:10px;align-items:center;background:var(--card);border-radius:8px;padding:6px 8px}
+.li b{font-size:12px;font-weight:600;display:block}.li small{font-size:11px;color:var(--muted)}
+.hd{display:flex;align-items:center;justify-content:space-between;background:#252932;border-bottom:1px solid #333844;padding:8px 12px;font-weight:700;border-radius:10px 10px 0 0}
+.hd small{color:#9AA1AD;font-weight:400;margin-left:8px}
+.tr{display:grid;grid-template-columns:34px minmax(0,2fr) 1.1fr 1.1fr 60px 40px;gap:8px;align-items:center;padding:6px 12px;border-bottom:1px solid #2a2f3a}
+.tr.h{color:#9AA1AD;font-weight:700;background:#1E2128}
+.bd{display:inline-block;background:#3A2E1E;color:#E8B34B;font-size:10px;font-weight:700;padding:1px 7px;border-radius:9px;margin-left:6px}
+.ft{display:flex;gap:6px;padding:8px 12px;background:#1E2128;border-radius:0 0 10px 10px}
+.cb{width:14px;height:14px;border:1px solid #6690F2;background:#25324F;border-radius:3px;display:inline-block}
+.cb.off{border-color:#454C5B;background:transparent}
+.dl{max-width:420px;background:#1E2128;border:1px solid #333844;border-radius:10px;padding:14px;color:#E8EAEF;font-size:12px}
+.dl .r{display:flex;align-items:center;gap:8px;padding:3px 0}
+.dl .m{color:#9AA1AD}
+.bt{display:flex;justify-content:flex-end;gap:6px;margin-top:10px}
+.pop{max-width:300px;background:#1E2128;border:1px solid #333844;border-radius:10px;padding:12px;color:#E8EAEF;font-size:12px}
+.stp{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:8px}
+.stp .n{font-size:18px;font-weight:700;width:28px;text-align:center}
+</style>
+</head>
+<body>
+<h1>Layout com ícones – CorsiDuplicate</h1>
+<p class="sub">Passe o mouse sobre os ícones para ver o tooltip de cada um. Estilo dos ícones baseado no CorsiRemote.</p>
+
+<div class="lbl">Opção A – duas linhas: ações e status em cima, pastas e qualidade embaixo</div>
+<div class="win" id="A"></div>
+<div class="lbl">Opção B – uma linha de ícones e uma faixa de status em largura total</div>
+<div class="win" id="B"></div>
+<div class="lbl">Opção C – barra lateral de ícones, status no topo com a similaridade ao lado</div>
+<div class="win" id="C"></div>
+
+<div class="lbl">Legenda dos ícones e do tooltip de cada um</div>
+<div class="lg" id="lg"></div>
+
+<div class="lbl">Janela de pastas (botão de pasta) – sem texto nos botões</div>
+<div class="win" style="overflow:visible">
+<div class="hd"><span>Pastas<small>clique fora para fechar</small></span><span id="x"></span></div>
+<div class="tr h"><span>On</span><span>Pasta</span><span>Última alteração</span><span>Último scan</span><span>Itens</span><span></span></div>
+<div class="tr"><span class="cb"></span><span>D:\Fotos\Aniversarios</span><span>02/10/2026<span class="bd">ALTERADA</span></span><span>01/10/2026</span><span>1.204</span><span id="r1"></span></div>
+<div class="tr"><span class="cb"></span><span>D:\Fotos\Viagens</span><span>28/09/2026</span><span>28/09/2026</span><span>3.877</span><span id="r2"></span></div>
+<div class="tr"><span class="cb off"></span><span>D:\Fotos\WhatsApp</span><span>15/09/2026</span><span>—</span><span>—</span><span id="r3"></span></div>
+<div class="ft" id="ft"></div>
+</div>
+
+<div class="lbl">Escolha de subpastas (aberta pelo ícone de pasta com subpasta)</div>
+<div class="dl">
+<b style="font-size:14px">Adicionar subpastas de D:\Fotos</b>
+<div class="m" style="margin:2px 0 8px">Encontradas 6 subpastas. Cada uma vira uma pasta própria na lista.</div>
+<div class="r"><span class="cb"></span><b>Selecionar todas</b></div>
+<div class="r" style="padding-left:18px"><span class="cb off"></span>Aniversarios <span class="m">· já está na lista</span></div>
+<div class="r" style="padding-left:18px"><span class="cb"></span>Casamento</div>
+<div class="r" style="padding-left:18px"><span class="cb"></span>Natal 2025</div>
+<div class="r" style="padding-left:18px"><span class="cb"></span>Praia</div>
+<div class="r" style="margin-top:6px"><span class="cb off"></span>Incluir também os níveis mais fundos</div>
+<div class="bt" id="bt"></div>
+</div>
+
+<div class="lbl">Menu de miniaturas (ícone da câmera)</div>
+<div class="pop"><b style="font-size:11px;color:#9AA1AD">MINIATURAS POR VÍDEO</b><div class="stp" id="stp"></div></div>
+
+<script>
+const P={
+scan:'<circle cx="10" cy="10" r="6"/><path d="M20 20l-5.5-5.5M10 7.5v5M7.5 10h5"/>',
+stop:'<circle cx="12" cy="12" r="8.5"/><path d="M8 8l8 8M16 8l-8 8"/>',
+all:'<path d="M4 7l8-4 8 4v10l-8 4-8-4zM4 7l8 4 8-4M12 11v10"/>',
+videos:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M10.5 8.5v4l3.5-2z"/>',
+cont:'<rect x="3" y="4" width="18" height="16" rx="2"/><rect x="8" y="9" width="8" height="6" rx="1"/>',
+sim:'<path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="17" r="2"/>',
+folder:'<path d="M3 7v11l2 2h14l2-2V9l-2-2h-8L9 5H5z"/>',
+addf:'<path d="M3 7v11l2 2h14l2-2V9l-2-2h-8L9 5H5zM12 10.5v6M9 13.5h6"/>',
+subf:'<path d="M3 5v8l2 2h6l2-2V7l-2-2H7L6 4H5zM12 17v3h8M12 17h5v-3h4v6"/>',
+up:'<path d="M12 19V5M6 11l6-6 6 6"/>',
+down:'<path d="M12 5v14M6 13l6 6 6-6"/>',
+clean:'<rect x="4" y="6" width="16" height="12" rx="2"/><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"/>',
+collapse:'<path d="M6 11l6-6 6 6M6 19l6-6 6 6"/>',
+thumbs:'<path d="M3 8v10"/><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M8 6l1.5-2.5h5L16 6"/><circle cx="12" cy="13" r="3.5"/>',
+trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/>',
+close:'<path d="M6 6l12 12M18 6L6 18"/>',
+check:'<path d="M5 12l4.5 4.5L19 7"/>',
+plus:'<path d="M12 5v14M5 12h14"/>',
+minus:'<path d="M5 12h14"/>',
+img:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 16l6-6 5 5 3-3 4 4"/>',
+file:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+size:'<rect x="3" y="13" width="18" height="7" rx="2"/><path d="M5 13l2.5-8h9L19 13M7 16.5h.5M11 16.5h6"/>',
+clock:'<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3.5 2"/>',
+res:'<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>',
+bars:'<path d="M4 20V10M10 20V4M16 20v-7M2 20h20"/>',
+snd:'<path d="M4 9v6h4l5 4V5L8 9zM16 9a4 4 0 010 6"/>',
+match:'<path d="M12 3l8 3v6l-2 4.5-6 4.5-6-4.5L4 12V6zM8.5 12l2.5 2.5 4.5-5"/>',
+hash:'<path d="M9 4L7 20M17 4l-2 16M4 9h16M4 15h16"/>'
+};
+const S=(n,h)=>`<svg viewBox="0 0 24 24" stroke="hsl(${h} 70% 66%)">${P[n]}</svg>`;
+const B=(n,h,t,c='')=>`<span class="ib ${c}"${t?` data-tip="${t}"`:''}>${S(n,h)}</span>`;
+const SP='<i class="sp"></i>';
+const seg=()=>`<span class="seg">${B('all',200,'Tudo: fotos e vídeos, procura duplicados')}${B('videos',215,'Vídeos: ignora fotos e procura só vídeos duplicados')}${B('cont',262,'Vídeos + Contained: compara todos os vídeos de cada pasta e acha trechos e compilações','on')}</span>`;
+const sim=w=>`<span class="sim" data-tip="Similaridade mínima para agrupar como duplicado (desligada no modo Contained)"><svg viewBox="0 0 24 24" stroke="hsl(40 70% 66%)">${P.sim}</svg><span class="sl" style="width:${w}px"><i></i></span><b>90%</b></span>`;
+const st=`<span class="st"><u></u><b>STATUS</b><em>Analyzing videos 7/20 – Aniversarios · pasta 2 de 5 · 38 vídeos encontrados</em></span>`;
+const scan=B('scan',215,'Procurar duplicados nas pastas ativas','pri')+B('stop',4,'Parar o scan em andamento');
+const folders=B('folder',40,'Abrir a lista de pastas (adicionar, ativar, remover)');
+const qual=B('up',150,'Qualidade alta: em todos os conjuntos, deixa sem marcar só a melhor cópia')+B('down',4,'Qualidade baixa: deixa sem marcar só a pior cópia');
+const acts=B('clean',190,'Limpar os resultados da tela, sem refazer o scan')+B('collapse',215,'Recolher todas as pastas')+B('thumbs',330,'Quantidade de miniaturas por vídeo');
+const del=(c='')=>B('trash',4,'Mover os arquivos marcados para a Lixeira',c);
+const chipList=[['img','Ordenar por semelhança visual das miniaturas'],['file','Ordenar por nome (A→Z)'],['size','Ordenar por tamanho'],['clock','Ordenar por duração'],['res','Ordenar por resolução'],['bars','Ordenar por taxa de bits'],['snd','Ordenar por taxa de áudio'],['match','Ordenar por % de semelhança'],['hash','Ordenar por hash']];
+const chips=chipList.map(c=>B(c[0],200,c[1],'s')).join('')+B('cont',262,'Contained: achar vídeos que são trechos de outros vídeos','s on r');
+const R=`<div class="rs"><div class="fh"><span>▾</span><b>D:\\Fotos\\Aniversarios</b><span class="m">1.204 itens</span><span class="chips">${chips}</span></div><div class="gh">Festa.mp4 é o original de 2 vídeos</div><div class="rw"><span class="th"></span><div><span class="tg o">ORIGINAL</span><b>Festa.mp4</b><small>Este é o vídeo original. Os 2 vídeos abaixo estão dentro dele.</small></div></div><div class="rw ch"><span class="th"></span><div><span class="tg d">ESTÁ DENTRO DO ORIGINAL</span><b>VID_0231.mp4</b><small>Este vídeo está dentro do Festa.mp4 (de 12:30 até 13:15).</small></div></div></div>`;
+const SB=`<div class="sb"><span>3 conjuntos · 2 vídeos marcados</span><span>v1.0.0.11</span></div>`;
+document.getElementById('A').innerHTML=`<div class="tb">${scan}${SP}${seg()}${SP}${sim(70)}${SP}${st}</div><div class="pr"></div><div class="tb2">${folders}${SP}${qual}${SP}${acts}<span class="fl"></span>${del('r')}</div>${R}${SB}`;
+document.getElementById('B').innerHTML=`<div class="tb">${scan}${SP}${seg()}${SP}${folders}${SP}${qual}${SP}${acts}${SP}${del()}<span class="fl"></span>${sim(60)}</div><div class="tb2" style="padding:5px 10px">${st}</div><div class="pr"></div>${R}${SB}`;
+const ri=h=>h.replace(/class="ib ([^"]*)"/g,(m,c)=>`class="ib ${c} ri"`);
+document.getElementById('C').innerHTML=`<div class="cw"><div class="rail">${ri(scan)}<i class="hs"></i>${ri(seg().replace('class="seg"','class="seg" style="flex-direction:column"'))}<i class="hs"></i>${ri(folders)}<i class="hs"></i>${ri(qual)}<i class="hs"></i>${ri(acts)}<span class="fl"></span>${ri(del())}</div><div class="cm"><div class="tb" style="border-radius:0 10px 0 0">${st}${SP}${sim(60)}</div><div class="pr"></div>${R}${SB.replace('border-radius:0 0 10px 10px','')}</div></div>`;
+const L=[['scan',215,'Scan','Procurar duplicados nas pastas ativas'],['stop',4,'Parar','Parar o scan em andamento'],['all',200,'Modo Tudo','Fotos e vídeos, procura duplicados'],['videos',215,'Modo Vídeos','Ignora fotos e procura só vídeos duplicados'],['cont',262,'Modo Vídeos + Contained','Compara todos os vídeos de cada pasta e acha trechos e compilações'],['sim',40,'Similaridade','Similaridade mínima para agrupar como duplicado'],['folder',40,'Pastas','Abrir a lista de pastas (adicionar, ativar, remover)'],['addf',40,'Adicionar pasta','Escolher uma ou mais pastas para adicionar'],['subf',40,'Adicionar subpastas','Escolher uma pasta mãe e adicionar cada subpasta'],['up',150,'Qualidade alta','Deixa sem marcar só a melhor cópia de cada conjunto'],['down',4,'Qualidade baixa','Deixa sem marcar só a pior cópia de cada conjunto'],['clean',190,'Limpar resultados','Limpa a tela sem refazer o scan'],['collapse',215,'Recolher tudo','Recolhe todas as pastas abertas'],['thumbs',330,'Miniaturas','Quantidade de miniaturas por vídeo'],['trash',4,'Excluir','Move os arquivos marcados para a Lixeira'],['close',4,'Remover da lista','Tira a pasta da lista (não apaga arquivos)'],['cont',262,'Filtro Contained','Acha vídeos que são trechos de outros vídeos']];
+document.getElementById('lg').innerHTML=L.map(l=>`<div class="li">${B(l[0],l[1])}<div><b>${l[2]}</b><small>${l[3]}</small></div></div>`).join('');
+document.getElementById('x').innerHTML=B('close',4,'Fechar','s r');
+['r1','r2','r3'].forEach(i=>document.getElementById(i).innerHTML=B('close',4,'Remover da lista','s r'));
+document.getElementById('ft').innerHTML=B('addf',40,'Adicionar pastas','pri')+B('subf',40,'Adicionar todas as subpastas de uma pasta');
+document.getElementById('bt').innerHTML=B('close',4,'Cancelar')+B('check',150,'Adicionar as pastas marcadas','pri');
+document.getElementById('stp').innerHTML=B('minus',200,'Menos miniaturas','s')+'<span class="n">1</span>'+B('plus',200,'Mais miniaturas','s');
+</script>
+</body>
+</html>

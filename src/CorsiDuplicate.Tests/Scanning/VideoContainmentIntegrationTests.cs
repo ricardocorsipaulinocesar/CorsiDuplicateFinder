@@ -1,4 +1,6 @@
+using CorsiDuplicate.Core.Grouping;
 using CorsiDuplicate.Core.Matching;
+using CorsiDuplicate.Infrastructure.Matching;
 using CorsiDuplicate.Core.Models;
 using CorsiDuplicate.Infrastructure.Media;
 using CorsiDuplicate.Infrastructure.Scanning;
@@ -131,6 +133,31 @@ public class VideoContainmentIntegrationTests
             var segmentB = Assert.Single(withB.Segments);
             Assert.InRange(segmentB.ClipStart, 13, 17);
             Assert.InRange(segmentB.SourceStart, 28, 32);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact(Timeout = 300_000)]
+    public async Task Videos_are_grouped_by_shared_scenes_not_by_quality_or_a_lucky_frame()
+    {
+        var (dir, source) = await CreateSourceAsync();
+        try
+        {
+            // The full video again, smaller and heavily compressed: same scenes, other quality.
+            await CutAsync(source, Path.Combine(dir, "lowquality.mp4"), start: 0, seconds: 90, filter: "scale=160:120");
+            await GenerateAsync("testsrc2=s=320x240:r=10:d=90", Path.Combine(dir, "unrelated.mp4"));
+
+            var items = await new ScanPipeline().ScanFolderAsync(dir);
+            Assert.Equal(3, items.Count);
+
+            var groups = new HammingClusterGrouper(new HsvHistogramComparer()).Group(items, thresholdPercent: 60);
+
+            var group = Assert.Single(groups);
+            Assert.Equal(new[] { "lowquality.mp4", "source.mp4" }, group.Items.Select(i => i.FileName).Order().ToArray());
+            Assert.All(group.Items, i => Assert.True(i.SimilarityToReferencePercent >= 85, $"{i.FileName}: {i.SimilarityToReferencePercent:0}%"));
         }
         finally
         {

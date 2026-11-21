@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Threading;
 using System.Windows;
+using System.Windows.Shell;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -125,6 +126,9 @@ public partial class MainViewModel : ObservableObject
     // Contained view re-applied instead of silently falling back to duplicate Sets.
     private readonly Dictionary<string, ContainmentResult> _containmentByFolder = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _containedViewFolders = new(StringComparer.OrdinalIgnoreCase);
+
+    // Files sent to the Recycle Bin since the last scan: the Contained legends skip them.
+    private readonly HashSet<string> _deletedPaths = new(StringComparer.OrdinalIgnoreCase);
 
     // Scan mode: "All" (photos and videos), "Videos" (photos skipped) or "VideosContained"
     // (photos skipped, and every folder gets the Contained analysis right after its duplicate
@@ -632,7 +636,9 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Replaces the folder's Sets with one Set per source video (its clips below it)
-    /// and one per compilation (its source videos below it). Click "Contained" again to go back.</summary>
+    /// and one per compilation (its source videos below it). Click "Contained" again to go back.
+    /// Legends only name videos that still exist in the list: files already deleted are
+    /// skipped, and a legend never says "below" so it stays true whatever the row order.</summary>
     private void ApplyContainedView(FolderResultsViewModel folder, ContainmentResult result,
         IReadOnlyDictionary<string, MediaItemViewModel>? knownItems = null)
     {
@@ -649,68 +655,168 @@ public partial class MainViewModel : ObservableObject
         MediaItemViewModel VmFor(MediaItem item) =>
             existing.TryGetValue(item.FullPath, out var vm) ? vm : existing[item.FullPath] = CreateItemViewModel(item, folder.Path);
 
+        bool Alive(MediaItem item) => !_deletedPaths.Contains(item.FullPath);
+
+        // The same video can sit in two Sets (e.g. a clip of one video and a source of a
+        // compilation). It is one row view model, so the first Set styles it and any other
+        // Set adds its own line to the legend instead of overwriting it.
+        var styled = new HashSet<MediaItemViewModel>();
+        bool Describe(MediaItemViewModel vm, string role, string roleColor, bool isChild, string note, string color,
+            IEnumerable<(int Start, int End)> stretches, int totalSeconds)
+        {
+            if (styled.Add(vm))
+            {
+                vm.SetContainment(role, roleColor, isChild, note, color, stretches, totalSeconds);
+                return true;
+            }
+
+            vm.AppendContainmentNote(note);
+            return false;
+        }
+
         var groups = new List<DuplicateGroupViewModel>();
         var setNumber = 1;
         foreach (var bySource in result.Clips.GroupBy(c => c.Source).OrderByDescending(g => g.Count()))
         {
-            var clipCount = bySource.Count();
-            var sourceSeconds = bySource.First().SourceSeconds;
-            var mainName = bySource.Key.FileName;
-            var sourceVm = VmFor(bySource.Key);
-            sourceVm.SetContainment("ORIGINAL", MediaItemViewModel.MainRoleColor, isChild: false,
-                clipCount == 1
-                    ? "Este é o vídeo original. O vídeo abaixo está dentro dele."
-                    : $"Este é o vídeo original. Os {clipCount} vídeos abaixo estão dentro dele.",
-                MediaItemViewModel.ClipColor,
-                bySource.Select(c => (c.Match.StartSeconds, c.Match.EndSeconds)), sourceSeconds);
+            var present = bySource.Where(c => Alive(c.Clip)).OrderBy(c => c.Match.StartSeconds).ToList();
+            if (present.Count == 0)
+            {
+                continue;
+            }
 
-            var rows = new List<MediaItemViewModel> { sourceVm };
-            foreach (var clip in bySource.OrderBy(c => c.Match.StartSeconds))
+            var mainName = bySource.Key.FileName;
+            var sourceAlive = Alive(bySource.Key);
+            var rows = new List<MediaItemViewModel>();
+
+            if (sourceAlive)
+            {
+                var gone = bySource.Count() - present.Count;
+                var sourceVm = VmFor(bySource.Key);
+                Describe(sourceVm, "ORIGINAL", MediaItemViewModel.MainRoleColor, false,
+                    $"Este é o vídeo original. Contém: {string.Join(", ", present.Select(c => c.Clip.FileName))}." +
+                    (gone > 0 ? $" ({gone} já excluído{(gone == 1 ? "" : "s")}.)" : ""),
+                    MediaItemViewModel.ClipColor,
+                    present.Select(c => (c.Match.StartSeconds, c.Match.EndSeconds)), bySource.First().SourceSeconds);
+                rows.Add(sourceVm);
+            }
+
+            foreach (var clip in present)
             {
                 var clipVm = VmFor(clip.Clip);
-                clipVm.SetContainment("ESTÁ DENTRO DO ORIGINAL", MediaItemViewModel.ExcerptRoleColor, isChild: true,
-                    $"Este vídeo está dentro do {mainName} (de {FormatSeconds(clip.Match.StartSeconds)} até " +
-                    $"{FormatSeconds(clip.Match.EndSeconds)}{(clip.Match.IsMirrored ? ", espelhado" : "")}).",
+                var span = $"{FormatSeconds(clip.Match.StartSeconds)} até {FormatSeconds(clip.Match.EndSeconds)}" +
+                           (clip.Match.IsMirrored ? ", espelhado" : "");
+                Describe(clipVm,
+                    sourceAlive ? "ESTÁ DENTRO DO ORIGINAL" : $"ERA TRECHO DO {mainName.ToUpperInvariant()}",
+                    MediaItemViewModel.ExcerptRoleColor, true,
+                    sourceAlive
+                        ? $"Este vídeo está dentro do {mainName} (de {span})."
+                        : $"O original {mainName} foi excluído. Este vídeo era o trecho de {span} dele.",
                     MediaItemViewModel.ClipColor,
                     new[] { (clip.Match.StartSeconds, clip.Match.EndSeconds) },
                     clip.SourceSeconds);
                 rows.Add(clipVm);
             }
 
+            var label = sourceAlive
+                ? $"{mainName} é o original de {present.Count} vídeo{(present.Count == 1 ? "" : "s")}"
+                : present.Count == 1
+                    ? $"1 vídeo era trecho do {mainName}"
+                    : $"{present.Count} vídeos eram trechos do {mainName}";
             groups.Add(new DuplicateGroupViewModel(new DuplicateGroup(), folder.Path, rows)
             {
                 SetNumber = setNumber++,
-                CustomLabel = $"{mainName} é o original de {clipCount} vídeo{(clipCount == 1 ? "" : "s")}",
+                CustomLabel = label,
                 Owner = folder,
             });
         }
 
+        var sourcePalette = new[] { "#7F77DD", "#1D9E75", "#D4537E", "#378ADD", "#BA7517", "#639922" };
         foreach (var compilation in result.Compilations)
         {
-            var allSegments = compilation.Sources.SelectMany(s => s.Segments).ToList();
-            var compilationVm = VmFor(compilation.Video);
+            var presentSources = compilation.Sources.Where(s => Alive(s.Source)).ToList();
+            if (!Alive(compilation.Video) || presentSources.Count == 0)
+            {
+                continue;
+            }
+
+            // Shown like an original's Set: the compilation first, then every video it was built
+            // from, whatever other Sets those videos are in. Each source video has its own colour,
+            // used on the compilation's bar, on the rule beside its row and on its legend.
             var compName = compilation.Video.FileName;
             var sourceCount = compilation.Sources.Count;
-            compilationVm.SetContainment("COMPILAÇÃO", MediaItemViewModel.CompilationColor, isChild: false,
-                sourceCount == 1
-                    ? "Este vídeo foi montado com pedaços do vídeo abaixo."
-                    : $"Este vídeo foi montado com pedaços dos {sourceCount} vídeos abaixo.",
-                MediaItemViewModel.CompilationColor,
-                allSegments.Select(s => (s.ClipStart, s.ClipEnd)),
+            var key = compilation.Video.FullPath;
+            var colors = presentSources
+                .Select((s, i) => (s.Source.FullPath, Color: sourcePalette[i % sourcePalette.Length]))
+                .ToDictionary(x => x.FullPath, x => x.Color);
+
+            // Stretches of the compilation that no remaining file holds.
+            var onlyHere = UncoveredRanges(compilation.Seconds,
+                presentSources.SelectMany(s => s.Segments).Select(s => (s.ClipStart, s.ClipEnd)));
+            var compilationVm = VmFor(compilation.Video);
+            Describe(compilationVm, "COMPILAÇÃO", MediaItemViewModel.CompilationColor, false,
+                $"Montado com pedaços de {JoinNames(presentSources.Select(s => s.Source.FileName))}." + OnlyHereSentence(onlyHere),
+                MediaItemViewModel.CompilationColor, Array.Empty<(int, int)>(), compilation.Seconds);
+            compilationVm.SetColoredBars(
+                presentSources.SelectMany(s => s.Segments.Select(seg => (seg.ClipStart, seg.ClipEnd, colors[s.Source.FullPath])))
+                    .Concat(onlyHere.Select(h => (h.Start, h.End, MediaItemViewModel.NoteBadColor))),
                 compilation.Seconds);
 
             var rows = new List<MediaItemViewModel> { compilationVm };
-            foreach (var source in compilation.Sources)
+            var sourceRows = new List<(MediaItemViewModel Vm, CompilationSource Source)>();
+            foreach (var source in presentSources)
             {
                 var sourceVm = VmFor(source.Source);
+                var color = colors[source.Source.FullPath];
                 var notes = source.Segments.Select(s =>
-                    $"O trecho {FormatSeconds(s.SourceStart)}–{FormatSeconds(s.SourceEnd)} deste vídeo aparece no {compName} " +
-                    $"(em {FormatSeconds(s.ClipStart)}–{FormatSeconds(s.ClipEnd)}{(s.IsMirrored ? ", espelhado" : "")}).");
-                sourceVm.SetContainment("USADO NA COMPILAÇÃO", MediaItemViewModel.ExcerptRoleColor, isChild: true,
-                    string.Join("\n", notes), MediaItemViewModel.CompilationColor,
-                    source.Segments.Select(s => (s.SourceStart, s.SourceEnd)), source.SourceSeconds);
+                    $"O trecho {FormatSeconds(s.SourceStart)}–{FormatSeconds(s.SourceEnd)} deste vídeo está no {compName}, " +
+                    $"em {FormatSeconds(s.ClipStart)}–{FormatSeconds(s.ClipEnd)}{(s.IsMirrored ? " (espelhado)" : "")}.");
+                if (Describe(sourceVm, "USADO NA COMPILAÇÃO", color, true,
+                        string.Join("\n", notes), color,
+                        source.Segments.Select(s => (s.SourceStart, s.SourceEnd)), source.SourceSeconds))
+                {
+                    sourceVm.SetContainmentAccent(color);
+                }
                 rows.Add(sourceVm);
+                sourceRows.Add((sourceVm, source));
             }
+
+            // What marking the compilation for deletion means, kept up to date as boxes are
+            // checked: what would be lost, and which videos keep what it contains.
+            void RefreshSelectionNotes()
+            {
+                if (!compilationVm.IsSelected)
+                {
+                    compilationVm.SetSelectionNote(key, null);
+                    foreach (var (vm, _) in sourceRows)
+                    {
+                        vm.SetSelectionNote(key, null);
+                    }
+                    return;
+                }
+
+                var kept = sourceRows.Where(r => !r.Vm.IsSelected).ToList();
+                var lost = UncoveredRanges(compilation.Seconds,
+                    kept.SelectMany(r => r.Source.Segments).Select(s => (s.ClipStart, s.ClipEnd)));
+                compilationVm.SetSelectionNote(key,
+                    lost.Count == 0
+                        ? $"MARCADO PARA EXCLUIR · Tudo o que está no {compName} continua em {JoinNames(kept.Select(r => r.Source.Source.FileName))}. Pode excluir sem perder conteúdo."
+                        : $"MARCADO PARA EXCLUIR · Atenção: {RangesText(lost)} só existe neste vídeo e será perdido.",
+                    lost.Count == 0 ? MediaItemViewModel.NoteGoodColor : MediaItemViewModel.NoteBadColor);
+                foreach (var (vm, source) in sourceRows)
+                {
+                    vm.SetSelectionNote(key,
+                        vm.IsSelected
+                            ? null
+                            : $"FICA NO COMPUTADOR · mantém {RangesText(source.Segments.Select(s => (s.ClipStart, s.ClipEnd)))} do {compName}.");
+                }
+            }
+
+            compilationVm.AddSelectionRefresher(RefreshSelectionNotes);
+            foreach (var (vm, _) in sourceRows)
+            {
+                vm.AddSelectionRefresher(RefreshSelectionNotes);
+            }
+            RefreshSelectionNotes();
 
             groups.Add(new DuplicateGroupViewModel(new DuplicateGroup(), folder.Path, rows)
             {
@@ -754,6 +860,49 @@ public partial class MainViewModel : ObservableObject
 
     private static string FormatSeconds(int seconds) =>
         seconds >= 3600 ? TimeSpan.FromSeconds(seconds).ToString(@"h\:mm\:ss") : TimeSpan.FromSeconds(seconds).ToString(@"m\:ss");
+    /// <summary>"A", "A e B", "A, B e C".</summary>
+    private static string JoinNames(IEnumerable<string> names)
+    {
+        var list = names.ToList();
+        return list.Count switch
+        {
+            0 => "",
+            1 => list[0],
+            _ => $"{string.Join(", ", list.Take(list.Count - 1))} e {list[^1]}",
+        };
+    }
+
+    private static string RangesText(IEnumerable<(int Start, int End)> ranges) =>
+        string.Join(", ", ranges.Select(r => $"{FormatSeconds(r.Start)}–{FormatSeconds(r.End)}"));
+
+    /// <summary>Parts of 0..total not covered by any range, ignoring gaps shorter than
+    /// <paramref name="minSeconds"/> (small mismatches between the matched stretches).</summary>
+    private static List<(int Start, int End)> UncoveredRanges(
+        int total, IEnumerable<(int Start, int End)> covered, int minSeconds = 5)
+    {
+        var holes = new List<(int Start, int End)>();
+        var position = 0;
+        foreach (var (start, end) in covered.OrderBy(c => c.Start))
+        {
+            if (start - position >= minSeconds)
+            {
+                holes.Add((position, start));
+            }
+            position = Math.Max(position, end);
+        }
+
+        if (total - position >= minSeconds)
+        {
+            holes.Add((position, total));
+        }
+        return holes;
+    }
+
+    private static string OnlyHereSentence(IReadOnlyList<(int Start, int End)> holes) =>
+        holes.Count == 0
+            ? ""
+            : $" {(holes.Count == 1 ? "O trecho" : "Os trechos")} {RangesText(holes)} ({holes.Sum(h => h.End - h.Start)} s) " +
+              $"{(holes.Count == 1 ? "só existe" : "só existem")} neste vídeo.";
 
     /// <summary>Plain, synchronous comparison for every folder-wide filter except "Thumb".</summary>
     private static List<MediaItemViewModel> OrderItemsByField(List<MediaItemViewModel> items, string key) => key switch
@@ -836,6 +985,7 @@ public partial class MainViewModel : ObservableObject
         _scanStartUtc = DateTime.UtcNow;
         _containmentByFolder.Clear();
         _containedViewFolders.Clear();
+        _deletedPaths.Clear();
         var videosOnly = ScanMode != ScanModeAll;
         var withContained = ScanMode == ScanModeVideosContained;
 
@@ -864,7 +1014,9 @@ public partial class MainViewModel : ObservableObject
                         IsProgressIndeterminate = false;
                         ScanProgressCurrent = p.FilesDone;
                         ScanProgressTotal = p.FilesTotal;
-                        StatusMessage = $"Scanning... {p.FilesDone}/{p.FilesTotal} - {folderDisplayName}{FormatEta(p)}";
+                        StatusMessage = p.Phase == "Scanning"
+                            ? $"Scanning... {p.FilesDone}/{p.FilesTotal} - {folderDisplayName}{FormatEta(p)}"
+                            : $"{p.Phase}... {p.FilesDone}/{p.FilesTotal} - {folderDisplayName}";
                     });
 
                     var items = await _scanPipeline.ScanFolderAsync(folder.Path, progress, _scanCts.Token, videosOnly);
@@ -1194,22 +1346,69 @@ public partial class MainViewModel : ObservableObject
 
         var failures = new List<string>();
         var failedItems = new HashSet<MediaItemViewModel>();
-        await Task.Run(() =>
+        var attempted = new List<MediaItemViewModel>();
+        var totalBytes = selected.Sum(i => i.SizeBytes);
+
+        // Progress modal and taskbar bar stay up for the whole run; Cancel stops after the
+        // file being moved right now, keeping everything already deleted.
+        _deleteCts = new CancellationTokenSource();
+        var token = _deleteCts.Token;
+        DeleteProgressTotal = selected.Count;
+        DeleteProgressCurrent = 0;
+        DeleteCurrentFile = "";
+        DeleteBytesText = $"{MediaItemViewModel.FormatBytes(0)} de {MediaItemViewModel.FormatBytes(totalBytes)} movidos para a Lixeira";
+        DeleteTaskbarState = TaskbarItemProgressState.Normal;
+        IsDeleting = true;
+
+        var progress = new Progress<(int Done, string File, long Bytes)>(step =>
         {
-            foreach (var item in selected)
-            {
-                if (!_recycleBin.TrySendToRecycleBin(item.Model.FullPath, out var error))
-                {
-                    failures.Add($"{item.FileName}: {error}");
-                    failedItems.Add(item);
-                    AppLogger.Warning(nameof(MainViewModel), nameof(DeleteSelectedAsync),
-                        $"Failed to send '{item.Model.FullPath}' to the Recycle Bin: {error}");
-                }
-            }
+            DeleteProgressCurrent = step.Done;
+            DeleteCurrentFile = step.File;
+            DeleteBytesText = $"{MediaItemViewModel.FormatBytes(step.Bytes)} de {MediaItemViewModel.FormatBytes(totalBytes)} movidos para a Lixeira";
         });
 
-        var deleted = selected.Where(i => !failedItems.Contains(i)).ToList();
+        try
+        {
+            await Task.Run(() =>
+            {
+                long bytesDone = 0;
+                foreach (var item in selected)
+                {
+                    if (token.IsCancellationRequested)
+                    {
+                        break;
+                    }
+
+                    ((IProgress<(int, string, long)>)progress).Report((attempted.Count, item.FileName, bytesDone));
+                    attempted.Add(item);
+                    if (!_recycleBin.TrySendToRecycleBin(item.Model.FullPath, out var error))
+                    {
+                        failures.Add($"{item.FileName}: {error}");
+                        failedItems.Add(item);
+                        AppLogger.Warning(nameof(MainViewModel), nameof(DeleteSelectedAsync),
+                            $"Failed to send '{item.Model.FullPath}' to the Recycle Bin: {error}");
+                    }
+                    else
+                    {
+                        bytesDone += item.SizeBytes;
+                    }
+                }
+            });
+        }
+        finally
+        {
+            IsDeleting = false;
+            _deleteCts.Dispose();
+            _deleteCts = null;
+        }
+
+        var wasCancelled = attempted.Count < selected.Count;
+        var deleted = attempted.Where(i => !failedItems.Contains(i)).ToList();
         var deletedPaths = deleted.Select(i => i.Model.FullPath).ToHashSet();
+        foreach (var path in deletedPaths)
+        {
+            _deletedPaths.Add(path);
+        }
 
         foreach (var list in _scannedItemsByFolder.Values)
         {
@@ -1225,16 +1424,24 @@ public partial class MainViewModel : ObservableObject
 
         foreach (var folderVm in FolderResults.ToList())
         {
-            foreach (var group in folderVm.Groups.ToList())
+            if (_containedViewFolders.Contains(folderVm.Path) && _containmentByFolder.TryGetValue(folderVm.Path, out var containment))
             {
-                foreach (var item in deleted.Where(d => group.Items.Contains(d)).ToList())
+                // The Contained legends depend on which videos are left, so rebuild them.
+                ApplyContainedView(folderVm, containment);
+            }
+            else
+            {
+                foreach (var group in folderVm.Groups.ToList())
                 {
-                    group.Items.Remove(item);
-                }
+                    foreach (var item in deleted.Where(d => group.Items.Contains(d)).ToList())
+                    {
+                        group.Items.Remove(item);
+                    }
 
-                if (group.Items.Count <= 1)
-                {
-                    folderVm.Groups.Remove(group);
+                    if (group.Items.Count <= 1)
+                    {
+                        folderVm.Groups.Remove(group);
+                    }
                 }
             }
 
@@ -1251,19 +1458,55 @@ public partial class MainViewModel : ObservableObject
 
         if (failures.Count == 0)
         {
-            StatusMessage = $"Moved {deleted.Count} file(s) to the Recycle Bin.";
+            StatusMessage = wasCancelled
+                ? $"Delete cancelled: moved {deleted.Count} of {selected.Count} file(s) to the Recycle Bin."
+                : $"Moved {deleted.Count} file(s) to the Recycle Bin.";
+            DeleteTaskbarState = TaskbarItemProgressState.None;
             MessageBox.Show(
-                $"Moved {deleted.Count} file(s) ({MediaItemViewModel.FormatBytes(deleted.Sum(i => i.SizeBytes))}) to the Recycle Bin.",
-                "Delete complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                $"Moved {deleted.Count} file(s) ({MediaItemViewModel.FormatBytes(deleted.Sum(i => i.SizeBytes))}) to the Recycle Bin."
+                + (wasCancelled ? $"\n\nCancelled: {selected.Count - deleted.Count} file(s) were left untouched." : ""),
+                wasCancelled ? "Delete cancelled" : "Delete complete", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         else
         {
             StatusMessage = $"Moved {deleted.Count} file(s); {failures.Count} failed.";
+            DeleteTaskbarState = TaskbarItemProgressState.Error;
             MessageBox.Show(
                 $"Moved {deleted.Count} file(s) to the Recycle Bin.\n\n{failures.Count} file(s) could not be deleted:\n{string.Join("\n", failures)}",
                 "Delete completed with errors", MessageBoxButton.OK, MessageBoxImage.Error);
+            DeleteTaskbarState = TaskbarItemProgressState.None;
         }
     }
+
+    // Delete progress: shown as a modal over the window and as the taskbar button's bar.
+    private CancellationTokenSource? _deleteCts;
+
+    [ObservableProperty]
+    private bool _isDeleting;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DeleteProgressFraction), nameof(DeleteProgressText))]
+    private int _deleteProgressCurrent;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DeleteProgressFraction), nameof(DeleteProgressText))]
+    private int _deleteProgressTotal;
+
+    [ObservableProperty]
+    private string _deleteCurrentFile = "";
+
+    [ObservableProperty]
+    private string _deleteBytesText = "";
+
+    [ObservableProperty]
+    private TaskbarItemProgressState _deleteTaskbarState = TaskbarItemProgressState.None;
+
+    public double DeleteProgressFraction => DeleteProgressTotal == 0 ? 0 : (double)DeleteProgressCurrent / DeleteProgressTotal;
+
+    public string DeleteProgressText => $"{Math.Min(DeleteProgressCurrent + 1, DeleteProgressTotal)} de {DeleteProgressTotal}";
+
+    [RelayCommand]
+    private void CancelDelete() => _deleteCts?.Cancel();
 }
 
 public sealed partial class FolderResultsViewModel : ObservableObject

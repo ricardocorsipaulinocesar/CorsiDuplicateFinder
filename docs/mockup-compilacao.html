@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup – compilações</title>
+<style>
+:root{--page:#0f1115;--text:#E8EAEF;--muted:#9AA1AD;--font:"Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--text);font-family:var(--font);font-size:14px;padding:24px 20px 60px;max-width:1000px;margin-inline:auto}
+h1{font-size:20px;font-weight:600;margin:0 0 4px}
+h2{font-size:16px;font-weight:600;margin:34px 0 4px;padding-top:12px;border-top:1px solid #2a2f3a}
+.sub{color:var(--muted);margin:0 0 10px}
+.lbl{font-size:13px;font-weight:600;margin:20px 0 6px}
+.win{background:#15171C;border:1px solid #333844;border-radius:10px;color:#E8EAEF;font-size:12px;padding:10px 0 6px}
+.gh{font-size:12px;font-weight:700;padding:2px 12px 4px;display:flex;gap:8px;align-items:center}
+.pill{font-size:10px;font-weight:700;padding:1px 8px;border-radius:9px;background:#2E2645;color:#B89AF5}
+.rw{display:flex;gap:10px;background:#1E2128;border:1px solid #333844;border-radius:7px;padding:7px 8px;align-items:center;margin:6px 10px}
+.rw.ch{margin-left:30px;border-left:3px solid var(--c,#454C5B);border-radius:0 7px 7px 0}
+.rw.gone{opacity:.5;border-style:dashed}
+.cb{width:15px;height:15px;border:1px solid #454C5B;border-radius:3px;flex:none}
+.cb.on{border-color:#6690F2;background:#25324F}
+.th{width:48px;height:32px;border-radius:5px;background:#333844;flex:none}
+.tg{display:inline-block;font-size:9px;font-weight:700;padding:1px 7px;border-radius:9px;margin-right:6px;color:#fff}
+.tg.comp{background:#C79A2E;color:#2a1d05}.tg.src{background:var(--c,#1D9E75)}.tg.keep{background:#1D9E75}.tg.warn{background:#C8453B}
+.rw small{display:block;color:#9AA1AD;font-size:11px;margin-top:2px}
+.tl{display:flex;height:10px;border-radius:5px;overflow:hidden;background:#333844;margin-top:5px;width:100%;max-width:520px}
+.tl i{display:block;height:10px}
+.tl .hole{background:repeating-linear-gradient(45deg,#C8453B,#C8453B 4px,#7a2a24 4px,#7a2a24 8px)}
+.lg{display:flex;gap:12px;flex-wrap:wrap;color:#9AA1AD;font-size:11px;padding:2px 12px 4px}
+.lg b{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.box{margin:6px 10px;padding:8px 10px;border-radius:7px;font-size:11.5px}
+.ok{background:#1E3327;color:#3FCA80}.no{background:#3A2426;color:#EA6F64}
+.tbl{width:calc(100% - 20px);margin:6px 10px;border-collapse:collapse;font-size:11.5px}
+.tbl td,.tbl th{padding:5px 8px;border-bottom:1px solid #2a2f3a;text-align:left}
+.tbl th{color:#9AA1AD;font-weight:600}
+.dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
+.opt{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+.opt div{background:#1a1d24;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.5}
+.opt b{display:block;margin-bottom:4px}
+.bad{color:#EA6F64}.good{color:#3FCA80}
+</style>
+</head>
+<body>
+<h1>Compilações – o que mostrar e o que marcar</h1>
+<p class="sub">Exemplo: Resumo.mp4 (1:20) foi montado com um trecho do Festa.mp4 (0:00–0:45) e outro do Aniversario.mp4 (0:45–1:05). Os últimos 15 s (1:05–1:20) não existem em nenhum outro arquivo.</p>
+
+<h2>1. Layout do conjunto</h2>
+
+<div class="lbl">Layout A – igual ao "original": a compilação em cima e todos os vídeos usados embaixo, com cor por vídeo</div>
+<div class="win">
+<div class="gh">Resumo.mp4 foi montado com pedaços de 2 vídeos <span class="pill">2 vídeos encontrados</span></div>
+<div class="rw"><span class="cb"></span><span class="th"></span><div style="flex:1"><span class="tg comp">COMPILAÇÃO</span><b>Resumo.mp4</b> · 1:20
+<small>Montado com pedaços de Festa.mp4 e Aniversario.mp4. Os últimos 15 s (1:05–1:20) não estão em nenhum outro arquivo.</small>
+<div class="tl"><i style="width:56.25%;background:#7F77DD"></i><i style="width:25%;background:#1D9E75"></i><i class="hole" style="width:18.75%"></i></div></div></div>
+<div class="rw ch" style="--c:#7F77DD"><span class="cb"></span><span class="th"></span><div><span class="tg src">USADO NA COMPILAÇÃO</span><b>Festa.mp4</b> · 40:12
+<small>O trecho 12:30–13:15 deste vídeo está no Resumo.mp4, em 0:00–0:45.</small></div></div>
+<div class="rw ch" style="--c:#1D9E75"><span class="cb"></span><span class="th"></span><div><span class="tg src">USADO NA COMPILAÇÃO</span><b>Aniversario.mp4</b> · 12:05
+<small>O trecho 3:10–3:30 deste vídeo está no Resumo.mp4, em 0:45–1:05.</small></div></div>
+<div class="lg"><span><b style="background:#7F77DD"></b>Festa.mp4</span><span><b style="background:#1D9E75"></b>Aniversario.mp4</span><span><b style="background:#C8453B"></b>só existe no Resumo.mp4</span></div>
+</div>
+
+<div class="lbl">Layout B – a compilação por trechos: uma tabela diz qual arquivo cobre cada pedaço</div>
+<div class="win">
+<div class="gh">Resumo.mp4 foi montado com pedaços de 2 vídeos</div>
+<div class="rw"><span class="cb"></span><span class="th"></span><div style="flex:1"><span class="tg comp">COMPILAÇÃO</span><b>Resumo.mp4</b> · 1:20</div></div>
+<table class="tbl">
+<tr><th>Trecho do Resumo</th><th>Está em</th><th>Posição no arquivo</th><th></th></tr>
+<tr><td>0:00–0:45</td><td><span class="dot" style="background:#7F77DD"></span>Festa.mp4</td><td>12:30–13:15</td><td class="good">já existe</td></tr>
+<tr><td>0:45–1:05</td><td><span class="dot" style="background:#1D9E75"></span>Aniversario.mp4</td><td>3:10–3:30</td><td class="good">já existe</td></tr>
+<tr><td>1:05–1:20</td><td><span class="dot" style="background:#C8453B"></span>nenhum arquivo</td><td>—</td><td class="bad">só existe aqui</td></tr>
+</table>
+<div class="rw ch" style="--c:#7F77DD"><span class="cb"></span><span class="th"></span><div><b>Festa.mp4</b> · 40:12</div></div>
+<div class="rw ch" style="--c:#1D9E75"><span class="cb"></span><span class="th"></span><div><b>Aniversario.mp4</b> · 12:05</div></div>
+</div>
+
+<h2>2. O que significa "marcar" quando eu seleciono a compilação</h2>
+<p class="sub">Aqui a compilação está marcada para exclusão (caixa azul).</p>
+
+<div class="lbl">Marcação 1 – avisar o que acontece, sem marcar mais nada (a mais segura)</div>
+<div class="win">
+<div class="rw"><span class="cb on"></span><span class="th"></span><div style="flex:1"><span class="tg comp">COMPILAÇÃO</span><b>Resumo.mp4</b> · 1:20 <span class="tg warn" style="margin-left:6px">MARCADO PARA EXCLUIR</span></div></div>
+<div class="rw ch" style="--c:#7F77DD"><span class="cb"></span><span class="th"></span><div><span class="tg keep">FICA NO COMPUTADOR</span><b>Festa.mp4</b><small>Mantém os 0:00–0:45 do Resumo (12:30–13:15).</small></div></div>
+<div class="rw ch" style="--c:#1D9E75"><span class="cb"></span><span class="th"></span><div><span class="tg keep">FICA NO COMPUTADOR</span><b>Aniversario.mp4</b><small>Mantém os 0:45–1:05 do Resumo (3:10–3:30).</small></div></div>
+<div class="box no">Atenção: os últimos 15 s (1:05–1:20) só existem no Resumo.mp4 e serão perdidos.</div>
+</div>
+<div class="win" style="margin-top:8px">
+<div class="rw"><span class="cb on"></span><span class="th"></span><div style="flex:1"><span class="tg comp">COMPILAÇÃO</span><b>Resumo.mp4</b> · 1:20 <span class="tg warn" style="margin-left:6px">MARCADO PARA EXCLUIR</span></div></div>
+<div class="box ok">Tudo o que está no Resumo.mp4 continua em Festa.mp4 e Aniversario.mp4. Pode excluir sem perder conteúdo.</div>
+<div class="lg">(mesmo conjunto, quando a compilação é 100% coberta por outros arquivos)</div>
+</div>
+
+<div class="lbl">Marcação 2 – marcar também os vídeos usados (exclui tudo junto)</div>
+<div class="win">
+<div class="rw"><span class="cb on"></span><span class="th"></span><div style="flex:1"><span class="tg comp">COMPILAÇÃO</span><b>Resumo.mp4</b> <span class="tg warn" style="margin-left:6px">MARCADO</span></div></div>
+<div class="rw ch" style="--c:#7F77DD"><span class="cb on"></span><span class="th"></span><div><b>Festa.mp4</b> <span class="tg warn" style="margin-left:6px">MARCADO</span></div></div>
+<div class="rw ch" style="--c:#1D9E75"><span class="cb on"></span><span class="th"></span><div><b>Aniversario.mp4</b> <span class="tg warn" style="margin-left:6px">MARCADO</span></div></div>
+<div class="box no">Cuidado: apaga a compilação e os vídeos originais ao mesmo tempo; nada do conteúdo fica no computador.</div>
+</div>
+
+<div class="lbl">Marcação 3 – quando eu marco um vídeo usado, avisar nas compilações que dependem dele</div>
+<div class="win">
+<div class="rw ch" style="--c:#7F77DD;margin-left:10px"><span class="cb on"></span><span class="th"></span><div><b>Festa.mp4</b> <span class="tg warn" style="margin-left:6px">MARCADO PARA EXCLUIR</span>
+<small class="bad">O Resumo.mp4 usa 0:45 deste vídeo. Se você mantiver o Resumo, só esse trecho continua; o resto do Festa.mp4 será perdido.</small></div></div>
+</div>
+
+<h2>Perguntas</h2>
+<div class="opt">
+<div><b>Layout</b>A: a compilação com os vídeos usados embaixo e cores por vídeo (mais parecido com o original).<br>B: tabela que diz qual arquivo cobre cada trecho.</div>
+<div><b>Marcação</b>1: só avisar o que fica e o que se perde.<br>2: marcar tudo junto (cuidado, apaga tudo).<br>3: avisar quando você marca um vídeo que alguma compilação usa.<br>Dá para combinar a 1 com a 3.</div>
+</div>
+</body>
+</html>

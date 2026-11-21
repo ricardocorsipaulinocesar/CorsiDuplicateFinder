@@ -277,6 +277,11 @@
         </Style>
     </Window.Resources>
 
+    <!-- Taskbar button: progress bar while files are being deleted. -->
+    <Window.TaskbarItemInfo>
+        <TaskbarItemInfo ProgressState="{Binding DeleteTaskbarState}" ProgressValue="{Binding DeleteProgressFraction}"/>
+    </Window.TaskbarItemInfo>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/> <!-- toolbar -->
@@ -587,11 +592,6 @@
                             </Popup>
                         </Grid>
 
-                        <Border Width="1" Background="{StaticResource Border}" Margin="10,2" Height="20"/>
-                        <Button Content="Delete" Style="{StaticResource PillDelete}"
-                                Command="{Binding DeleteSelectedCommand}"
-                                IsEnabled="{Binding Selection.HasSelection}"
-                                ToolTip="Move every checked file to the Recycle Bin"/>
                     </StackPanel>
                 </Border>
             </StackPanel>
@@ -784,7 +784,18 @@
                                     </Border>
 
                                     <StackPanel Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}" Margin="10,10,10,10">
-                                        <ItemsControl ItemsSource="{Binding Groups}">
+                                        <!-- The Sets are only built while the folder is expanded: a collapsed folder
+                                             used to create every Set's grid and rows anyway (just hidden). -->
+                                        <ItemsControl>
+                                            <ItemsControl.Style>
+                                                <Style TargetType="ItemsControl">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                                            <Setter Property="ItemsSource" Value="{Binding Groups}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ItemsControl.Style>
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
                                                     <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="8" Margin="0,0,0,10">
@@ -868,7 +879,7 @@
                                                                             <DataTemplate>
                                                                                 <Border Background="{StaticResource SurfaceAlt}" CornerRadius="4" Margin="4"
                                                                                         Height="{Binding DataContext.ThumbnailColumnWidth, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                                        Cursor="Hand"
+                                                                                        Cursor="Hand" Loaded="ThumbnailCell_Loaded"
                                                                                         MouseLeftButtonUp="ThumbnailBorder_MouseLeftButtonUp">
                                                                                     <Border.Width>
                                                                                         <MultiBinding Converter="{StaticResource FilmstripWidth}">
@@ -915,7 +926,7 @@
                                                                         <DataGridTemplateColumn.CellTemplate>
                                                                             <DataTemplate>
                                                                                 <Border Margin="{Binding ContainmentIndent}" BorderThickness="{Binding ContainmentRule}"
-                                                                                        BorderBrush="{StaticResource Border}" Padding="4,0" VerticalAlignment="Center">
+                                                                                        BorderBrush="{Binding ContainmentAccent, Converter={StaticResource StringToBrush}}" Padding="4,0" VerticalAlignment="Center">
                                                                                 <StackPanel VerticalAlignment="Center">
                                                                                     <Border CornerRadius="8" Padding="7,1" Margin="0,2,0,3" HorizontalAlignment="Left"
                                                                                             Background="{Binding ContainmentRoleColor, Converter={StaticResource StringToBrush}}"
@@ -927,6 +938,9 @@
                                                                                     <TextBlock Text="{Binding ContainmentNote}" FontSize="11" FontWeight="SemiBold" Margin="0,3,0,0"
                                                                                                Foreground="{Binding ContainmentColor, Converter={StaticResource StringToBrush}}" TextWrapping="Wrap"
                                                                                                Visibility="{Binding HasContainmentNote, Converter={StaticResource BoolToVis}}"/>
+                                                                                    <TextBlock Text="{Binding SelectionNote}" FontSize="11" FontWeight="Bold" Margin="0,3,0,0"
+                                                                                               Foreground="{Binding SelectionNoteColor, Converter={StaticResource StringToBrush}}" TextWrapping="Wrap"
+                                                                                               Visibility="{Binding HasSelectionNote, Converter={StaticResource BoolToVis}}"/>
                                                                                     <Border Width="220" Height="6" CornerRadius="3" Background="{StaticResource Border}"
                                                                                             HorizontalAlignment="Left" Margin="0,5,0,0"
                                                                                             Visibility="{Binding HasContainmentBars, Converter={StaticResource BoolToVis}}">
@@ -940,7 +954,7 @@
                                                                                                 <DataTemplate>
                                                                                                     <Border CornerRadius="3" HorizontalAlignment="Left" Height="6"
                                                                                                             Width="{Binding Width}" Margin="{Binding Margin}"
-                                                                                                            Background="{Binding DataContext.ContainmentColor, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource StringToBrush}}"/>
+                                                                                                            Background="{Binding Color, Converter={StaticResource StringToBrush}}"/>
                                                                                                 </DataTemplate>
                                                                                             </ItemsControl.ItemTemplate>
                                                                                         </ItemsControl>
@@ -1031,13 +1045,49 @@
         </ScrollViewer>
 
         <!-- Status bar -->
-        <Border Grid.Row="4" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Padding="16,10">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock FontWeight="Black" FontSize="15" Foreground="{StaticResource AccentStrong}" Text="{Binding Selection.SelectedCount}"/>
-                <TextBlock Text=" selected" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Bottom" Margin="4,0,16,1"/>
-                <TextBlock FontWeight="Black" FontSize="15" Foreground="{StaticResource AccentStrong}" Text="{Binding Selection.TotalSelectedDisplay}"/>
-                <TextBlock Text=" total size" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Bottom" Margin="4,0,0,1"/>
-            </StackPanel>
+        <Border Grid.Row="4" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Padding="16,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock FontWeight="Black" FontSize="15" Foreground="{StaticResource AccentStrong}" Text="{Binding Selection.SelectedCount}"/>
+                    <TextBlock Text=" selected" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Bottom" Margin="4,0,16,1"/>
+                    <TextBlock FontWeight="Black" FontSize="15" Foreground="{StaticResource AccentStrong}" Text="{Binding Selection.TotalSelectedDisplay}"/>
+                    <TextBlock Text=" total size" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Bottom" Margin="4,0,0,1"/>
+                </StackPanel>
+                <Button Grid.Column="1" Style="{StaticResource PillDelete}" Margin="0,0,64,0"
+                        Command="{Binding DeleteSelectedCommand}"
+                        IsEnabled="{Binding Selection.HasSelection}"
+                        ToolTip="Move every checked file to the Recycle Bin">
+                    <TextBlock>
+                        <Run Text="Mover para a Lixeira"/><Run Text=" ("/><Run Text="{Binding Selection.TotalSelectedDisplay, Mode=OneWay}"/><Run Text=")"/>
+                    </TextBlock>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Delete progress: modal over the whole window while files are moved to the Recycle
+             Bin (the taskbar button shows the same progress). -->
+        <Border Grid.Row="0" Grid.RowSpan="5" Background="#B3000000"
+                Visibility="{Binding IsDeleting, Converter={StaticResource BoolToVis}}">
+            <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1"
+                    CornerRadius="10" Padding="22,18" Width="400" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="Excluindo arquivos…" Foreground="{StaticResource Text}" FontSize="15" FontWeight="SemiBold"/>
+                    <TextBlock Foreground="{StaticResource TextMuted}" FontSize="11.5" Margin="0,10,0,0" TextTrimming="CharacterEllipsis">
+                        <Run Text="{Binding DeleteProgressText, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding DeleteCurrentFile, Mode=OneWay}"/>
+                    </TextBlock>
+                    <ProgressBar Height="6" Margin="0,6,0,0" BorderThickness="0" Background="{StaticResource Border}"
+                                 Foreground="{StaticResource Success}" Minimum="0" Maximum="{Binding DeleteProgressTotal}"
+                                 Value="{Binding DeleteProgressCurrent, Mode=OneWay}"/>
+                    <TextBlock Text="{Binding DeleteBytesText}" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,6,0,0"/>
+                    <Button Content="Cancelar" Style="{StaticResource PillDanger}" HorizontalAlignment="Right" Margin="0,12,0,0"
+                            Command="{Binding CancelDeleteCommand}"
+                            ToolTip="Stop after the file being moved now; files already deleted stay in the Recycle Bin"/>
+                </StackPanel>
+            </Border>
         </Border>
         <TextBlock Grid.Row="4" Text="{Binding AppVersion}" HorizontalAlignment="Right" VerticalAlignment="Center"
                    Margin="0,0,16,0" FontSize="10.5" Opacity="0.75" Foreground="{StaticResource TextMuted}"

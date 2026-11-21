@@ -63,7 +63,83 @@ public static class ContainmentMatcher
         return new ContainmentComparison(contained, segments);
     }
 
+    /// <summary>
+    /// How much of the two videos' scenes they have in common, in the same order, as a
+    /// percentage of the longer one (0–100). Quality, resolution and bit rate don't matter;
+    /// what matters is whether the sequence of scenes lines up. A single similar frame, a
+    /// still room or a shared intro is not enough, and a short excerpt of a long video
+    /// scores low (that case belongs to the Contained analysis).
+    /// </summary>
+    public static double SharedScenesPercent(VideoFingerprint a, VideoFingerprint b)
+    {
+        if (a.Length == 0 || b.Length == 0)
+        {
+            return 0;
+        }
+
+        var (clip, source) = a.Length <= b.Length ? (a, b) : (b, a);
+        var shared = SharedSeconds(clip, source, clip.Hashes);
+        if (clip.MirroredHashes is { } mirrored)
+        {
+            shared = Math.Max(shared, SharedSeconds(clip, source, mirrored));
+        }
+
+        var denominator = Math.Max(a.UsableCount, b.UsableCount);
+        return denominator == 0 ? 0 : Math.Min(100.0, 100.0 * shared / denominator);
+    }
+
+    /// <summary>Seconds of the clip that line up with the source on the best offset, counted
+    /// only when at least <see cref="DefaultMinMatchedSeconds"/> of them are distinctive.</summary>
+    private static int SharedSeconds(VideoFingerprint clip, VideoFingerprint source, ulong[] clipHashes)
+    {
+        if (Prepare(clipHashes, clip, source) is not { } alignment)
+        {
+            return 0;
+        }
+
+        var best = 0;
+        foreach (var offset in alignment.TopOffsets)
+        {
+            int all = 0, distinctive = 0;
+            for (var i = 0; i < clip.Length; i++)
+            {
+                if (!clip.Usable[i] || !MatchedAt(alignment.Matches, i, offset))
+                {
+                    continue;
+                }
+
+                all++;
+                if (alignment.Distinctive[i])
+                {
+                    distinctive++;
+                }
+            }
+
+            if (distinctive >= DefaultMinMatchedSeconds)
+            {
+                best = Math.Max(best, all);
+            }
+        }
+        return best;
+    }
+
+    private sealed record Alignment(List<int>?[] Matches, bool[] Distinctive, List<int> TopOffsets);
+
     private static ContainmentComparison Align(ulong[] clipHashes, VideoFingerprint clip, VideoFingerprint source, bool mirrored)
+    {
+        if (Prepare(clipHashes, clip, source) is not { } alignment)
+        {
+            return new ContainmentComparison(null, Array.Empty<SharedSegment>());
+        }
+
+        return new ContainmentComparison(
+            FindContained(clip, source, alignment.Matches, alignment.Distinctive, alignment.TopOffsets, mirrored),
+            FindSegments(clip, source, alignment.Matches, alignment.Distinctive, alignment.TopOffsets, mirrored));
+    }
+
+    /// <summary>For each usable clip second, the source seconds that look the same; plus the
+    /// strongest candidate offsets between the two timelines. Null when nothing matches.</summary>
+    private static Alignment? Prepare(ulong[] clipHashes, VideoFingerprint clip, VideoFingerprint source)
     {
         var distinctiveLimit = Math.Max(20, (int)(source.Length * NonDistinctiveShare));
         var matches = new List<int>?[clip.Length];
@@ -109,13 +185,11 @@ public static class ContainmentMatcher
 
         if (votes.Count == 0)
         {
-            return new ContainmentComparison(null, Array.Empty<SharedSegment>());
+            return null;
         }
 
         var topOffsets = votes.OrderByDescending(kv => kv.Value).Take(8).Select(kv => kv.Key).ToList();
-        return new ContainmentComparison(
-            FindContained(clip, source, matches, distinctive, topOffsets, mirrored),
-            FindSegments(clip, source, matches, distinctive, topOffsets, mirrored));
+        return new Alignment(matches, distinctive, topOffsets);
     }
 
     /// <summary>

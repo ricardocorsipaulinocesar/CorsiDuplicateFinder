@@ -14,6 +14,15 @@ public partial class MainWindow : Window
         DataContext = new MainViewModel();
     }
 
+    // Thumbnail images are only decoded for rows that are actually realized on screen.
+    private void ThumbnailCell_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: MediaItemViewModel item })
+        {
+            item.EnsureThumbnailsDecoded();
+        }
+    }
+
     private void ThumbnailResizeThumb_DragDelta(object sender, DragDeltaEventArgs e)
     {
         if (DataContext is MainViewModel vm)

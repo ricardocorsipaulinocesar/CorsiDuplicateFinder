@@ -66,6 +66,11 @@ public static class CombinedSimilarityScorer
             return 0.0;
         }
 
+        if (a.Kind == MediaKind.Video && (a.SceneCheckDone || b.SceneCheckDone))
+        {
+            return VideoSimilarity(a, b);
+        }
+
         var hashSimilarity = 0.0;
         if (a.OrientationHashes is { Length: > 0 } ha && b.OrientationHashes is { Length: > 0 } hb)
         {
@@ -117,6 +122,52 @@ public static class CombinedSimilarityScorer
         }
 
         return best;
+    }
+
+    /// <summary>A video pair whose scenes could not be compared never scores above this, so it
+    /// can't reach the slider's minimum (60) on a lucky single frame.</summary>
+    private const double UnverifiedVideoCeiling = 59.0;
+
+    // Comparing two scene sequences is the costly part of grouping; moving the slider
+    // regroups again and again, so each pair is computed once (keyed on the first item).
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MediaItem, Dictionary<MediaItem, double>> SceneScores = new();
+
+    /// <summary>
+    /// Videos are judged by their scenes: the percentage of the two sequences that match, in
+    /// order. Same footage re-encoded, resized or recompressed scores high; videos that merely
+    /// share a frame, a room or a colour palette score near zero.
+    /// </summary>
+    private static double VideoSimilarity(MediaItem a, MediaItem b)
+    {
+        if (a.SceneFingerprint is { } fa && b.SceneFingerprint is { } fb)
+        {
+            if (string.CompareOrdinal(a.FullPath, b.FullPath) > 0)
+            {
+                (a, b) = (b, a);
+                (fa, fb) = (fb, fa);
+            }
+
+            var cache = SceneScores.GetOrCreateValue(a);
+            lock (cache)
+            {
+                if (cache.TryGetValue(b, out var known))
+                {
+                    return known;
+                }
+            }
+
+            var score = ContainmentMatcher.SharedScenesPercent(fa, fb);
+            lock (cache)
+            {
+                cache[b] = score;
+            }
+            return score;
+        }
+
+        var frameScore = a.FrameOrientationHashes is { Count: > 0 } frames1 && b.FrameOrientationHashes is { Count: > 0 } frames2
+            ? HammingDistance.BestFramePairSimilarityPercent(frames1, frames2)
+            : 0.0;
+        return Math.Min(frameScore, UnverifiedVideoCeiling);
     }
 
     private static bool SharePersonCluster(MediaItem a, MediaItem b)

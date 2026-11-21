@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup – excluir no rodapé e legendas do Contained</title>
+<style>
+:root{--page:#0f1115;--text:#E8EAEF;--muted:#9AA1AD;--card:#1a1d24;--font:"Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--text);font-family:var(--font);font-size:14px;padding:24px 20px 60px;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;font-weight:600;margin:0 0 4px}
+h2{font-size:16px;font-weight:600;margin:36px 0 4px;padding-top:12px;border-top:1px solid #2a2f3a}
+.sub{color:var(--muted);margin:0 0 10px}
+.lbl{font-size:13px;font-weight:600;margin:20px 0 6px}
+.win{background:#15171C;border:1px solid #333844;border-radius:10px;color:#E8EAEF;font-size:12px;overflow:hidden}
+.rw{display:flex;gap:8px;background:#1E2128;border:1px solid #333844;border-radius:7px;padding:6px 8px;align-items:center;margin:6px 10px}
+.rw.ch{margin-left:30px;border-left:2px solid #454C5B;border-radius:0 7px 7px 0}
+.rw.gone{opacity:.45;border-style:dashed}
+.th{width:44px;height:30px;border-radius:5px;background:#333844;flex:none}
+.tg{display:inline-block;font-size:9px;font-weight:700;padding:1px 7px;border-radius:9px;margin-right:6px}
+.o{background:#7F77DD;color:#fff}.d{background:#1D9E75;color:#fff}.c{background:#E8B34B;color:#2a1d05}
+.rw small{display:block;color:#9AA1AD;font-size:11px;margin-top:1px}
+.bad{color:#EA6F64!important}
+.good{color:#3FCA80!important}
+.gh{font-size:12px;font-weight:700;padding:8px 12px 0}
+.sb{display:flex;align-items:center;gap:14px;padding:9px 14px;border-top:1px solid #333844;background:#1E2128;color:#9AA1AD;font-size:11px}
+.sb b{font-size:15px;font-weight:900;color:#8CAAF5}
+.fl{flex:1}
+.btn{display:inline-flex;align-items:center;gap:8px;border-radius:15px;padding:7px 16px;font-weight:700;font-size:12px;border:1px solid transparent}
+.del{background:#3A2426;color:#EA6F64}
+.delsolid{background:#C8453B;color:#fff}
+.dis{opacity:.4}
+.ib{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#3a2426,#241518);border:1px solid rgba(255,255,255,.11);box-shadow:2px 2px 0 rgba(5,8,12,.6),-1px -1px 0 rgba(56,70,88,.28);display:inline-flex;align-items:center;justify-content:center;position:relative}
+.ib svg,.btn svg{width:17px;height:17px;fill:none;stroke:#EA6F64;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.btn.delsolid svg{stroke:#fff}
+.badge{position:absolute;top:-6px;right:-6px;background:#EA6F64;color:#fff;font-size:10px;font-weight:700;border-radius:9px;padding:0 5px}
+.pg{flex:1;max-width:420px}
+.pg .bar{height:6px;background:#333844;border-radius:3px;overflow:hidden;margin-top:4px}
+.pg .bar i{display:block;height:6px;background:#3FCA80;width:58%}
+.pg span{display:block;color:#E8EAEF;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.task{display:flex;align-items:center;gap:10px;background:#1b2330;border-top:1px solid #333844;padding:6px 12px;border-radius:0 0 10px 10px}
+.tk{width:40px;height:40px;border-radius:8px;background:#2a3140;position:relative;display:flex;align-items:center;justify-content:center;color:#8CAAF5;font-weight:700}
+.tk i{position:absolute;left:3px;right:3px;bottom:2px;height:4px;background:#333844;border-radius:2px}
+.tk i::after{content:"";position:absolute;left:0;top:0;bottom:0;width:58%;background:#3FCA80;border-radius:2px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:14px}
+.note{color:var(--muted);font-size:12px;margin:6px 0 0}
+</style>
+</head>
+<body>
+<h1>Melhorias: excluir no rodapé, andamento e legendas do Contained</h1>
+<p class="sub">Escolha uma opção em cada um dos três pontos.</p>
+
+<h2>1. Botão de excluir no rodapé</h2>
+<p class="sub">Fica na mesma barra onde hoje aparecem "selected" e "total size", à esquerda da versão.</p>
+
+<div class="lbl">Opção 1A – botão com texto, só ativo quando há seleção</div>
+<div class="win"><div class="sb"><span><b>12</b> selected</span><span><b>3,4 GB</b> total size</span><span class="fl"></span>
+<span class="btn del"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg>Excluir 12 arquivos</span><span>v1.0.0.12</span></div></div>
+
+<div class="lbl">Opção 1B – botão sólido vermelho, bem destacado</div>
+<div class="win"><div class="sb"><span><b>12</b> selected</span><span><b>3,4 GB</b> total size</span><span class="fl"></span>
+<span class="btn delsolid"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg>Mover para a Lixeira (3,4 GB)</span><span>v1.0.0.12</span></div></div>
+
+<div class="lbl">Opção 1C – só ícone da lixeira com a quantidade (combina com o layout de ícones)</div>
+<div class="win"><div class="sb"><span><b>12</b> selected</span><span><b>3,4 GB</b> total size</span><span class="fl"></span>
+<span class="ib"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg><span class="badge">12</span></span><span>v1.0.0.12</span></div></div>
+
+<div class="lbl">Sem nada marcado (qualquer opção): o botão fica apagado</div>
+<div class="win"><div class="sb"><span><b>0</b> selected</span><span><b>0 B</b> total size</span><span class="fl"></span>
+<span class="btn del dis"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg>Excluir</span><span>v1.0.0.12</span></div></div>
+
+<h2>2. Andamento da exclusão</h2>
+<p class="sub">Sempre mostra o progresso no ícone do app na barra de tarefas do Windows (barra verde crescendo). Dentro do app:</p>
+
+<div class="lbl">Opção 2A – o rodapé vira uma barra de progresso, com botão de cancelar</div>
+<div class="win"><div class="sb"><div class="pg"><span><b style="font-size:12px">Excluindo 7 de 12</b> · VID_0231.mp4 · 1,9 GB de 3,4 GB</span><div class="bar"><i></i></div></div><span class="fl"></span><span class="btn del">Cancelar</span><span>v1.0.0.12</span></div>
+<div class="task"><div class="tk">CD<i></i></div><span style="color:#9AA1AD">Barra de tarefas do Windows: ícone com barra verde em 58%</span></div></div>
+
+<div class="lbl">Opção 2B – só no campo de status do topo e na barra de tarefas</div>
+<div class="win"><div style="display:flex;padding:8px 12px;background:#1E2128;border-bottom:1px solid #333844"><span style="background:#252932;border:1px solid #333844;border-radius:7px;padding:6px 10px;flex:1"><b style="color:#9AA1AD;font-size:10px">STATUS</b>&nbsp; <b style="color:#3FCA80">Excluindo 7/12 – VID_0231.mp4 (1,9 GB de 3,4 GB)</b></span></div>
+<div class="task"><div class="tk">CD<i></i></div><span style="color:#9AA1AD">Barra de tarefas do Windows: ícone com barra verde em 58%</span></div></div>
+
+<div class="lbl">Opção 2C – janela de progresso no meio da tela, bloqueando cliques</div>
+<div class="win" style="padding:30px;display:flex;justify-content:center;background:rgba(0,0,0,.5)">
+<div style="background:#1E2128;border:1px solid #333844;border-radius:10px;padding:16px 20px;width:360px"><b>Excluindo arquivos…</b><div class="pg" style="max-width:none;margin-top:8px"><span>7 de 12 · VID_0231.mp4</span><div class="bar"><i></i></div><span style="color:#9AA1AD;margin-top:4px">1,9 GB de 3,4 GB movidos para a Lixeira</span></div><div style="text-align:right;margin-top:10px"><span class="btn del">Cancelar</span></div></div></div>
+<p class="note">Ao terminar, o resumo "Moved N file(s)" continua aparecendo como hoje. Se houver erro, a barra da tarefa fica vermelha.</p>
+
+<h2>3. Legendas do Contained que citam vídeos que não estão mais no conjunto</h2>
+<p class="sub">Hoje o texto diz "os 2 vídeos abaixo estão dentro dele", mas depois de excluir um vídeo (ou quando o mesmo vídeo está em dois conjuntos) o texto não bate mais com o que está na tela.</p>
+
+<div class="lbl">Como está hoje (o problema)</div>
+<div class="win">
+<div class="gh">Festa.mp4 é o original de 2 vídeos</div>
+<div class="rw"><span class="th"></span><div><span class="tg o">ORIGINAL</span><b>Festa.mp4</b><small class="bad">Este é o vídeo original. Os 2 vídeos abaixo estão dentro dele.   ← só sobrou 1 abaixo</small></div></div>
+<div class="rw ch"><span class="th"></span><div><span class="tg d">ESTÁ DENTRO DO ORIGINAL</span><b>bolo.mp4</b><small>Este vídeo está dentro do Festa.mp4 (de 25:02 até 25:40).</small></div></div>
+<div class="gh" style="margin-top:8px">Resumo.mp4 foi montado com pedaços de 2 vídeos</div>
+<div class="rw"><span class="th"></span><div><span class="tg c">COMPILAÇÃO</span><b>Resumo.mp4</b><small class="bad">Este vídeo foi montado com pedaços dos 2 vídeos abaixo.   ← nenhum vídeo abaixo</small></div></div>
+<div style="height:8px"></div></div>
+
+<div class="lbl">Opção 3A – citar sempre o nome do arquivo, sem "abaixo"</div>
+<div class="win">
+<div class="gh">Festa.mp4 é o original de 2 vídeos</div>
+<div class="rw"><span class="th"></span><div><span class="tg o">ORIGINAL</span><b>Festa.mp4</b><small class="good">Este é o vídeo original. Contém: VID_0231.mp4 (excluído) e bolo.mp4.</small></div></div>
+<div class="rw ch"><span class="th"></span><div><span class="tg d">ESTÁ DENTRO DO ORIGINAL</span><b>bolo.mp4</b><small class="good">Este vídeo está dentro do Festa.mp4 (de 25:02 até 25:40).</small></div></div>
+<div class="gh" style="margin-top:8px">Resumo.mp4 foi montado com pedaços de 2 vídeos</div>
+<div class="rw"><span class="th"></span><div><span class="tg c">COMPILAÇÃO</span><b>Resumo.mp4</b><small class="good">Montado com pedaços de: Festa.mp4 (0:00–0:45) e Aniversario.mp4 (0:45–1:20). Os dois já foram excluídos.</small></div></div>
+<div style="height:8px"></div></div>
+
+<div class="lbl">Opção 3B – o texto se atualiza e mostra o que ainda existe na tela; vídeos que saíram aparecem riscados e apagados</div>
+<div class="win">
+<div class="gh">Festa.mp4 é o original de 2 vídeos (1 ainda na lista)</div>
+<div class="rw"><span class="th"></span><div><span class="tg o">ORIGINAL</span><b>Festa.mp4</b><small class="good">Este é o vídeo original. Contém: bolo.mp4.</small></div></div>
+<div class="rw ch"><span class="th"></span><div><span class="tg d">ESTÁ DENTRO DO ORIGINAL</span><b>bolo.mp4</b><small class="good">Este vídeo está dentro do Festa.mp4 (de 25:02 até 25:40).</small></div></div>
+<div class="rw ch gone"><span class="th"></span><div><b style="text-decoration:line-through">VID_0231.mp4</b><small>Excluído (estava dentro do Festa.mp4, de 12:30 até 13:15).</small></div></div>
+<div style="height:8px"></div></div>
+
+<div class="lbl">Opção 3C – quando o original some, o trecho avisa e deixa de falar em "original"</div>
+<div class="win">
+<div class="gh">2 vídeos eram trechos do Festa.mp4</div>
+<div class="rw"><span class="th"></span><div><span class="tg d">ERA TRECHO DO FESTA.MP4</span><b>VID_0231.mp4</b><small class="good">O original Festa.mp4 foi excluído. Este vídeo (12:30–13:15 do original) agora é o único arquivo com esse conteúdo.</small></div></div>
+<div class="rw"><span class="th"></span><div><span class="tg d">ERA TRECHO DO FESTA.MP4</span><b>bolo.mp4</b><small class="good">O original Festa.mp4 foi excluído. Este vídeo (25:02–25:40 do original) agora é o único arquivo com esse conteúdo.</small></div></div>
+<div style="height:8px"></div></div>
+<p class="note">Em qualquer opção, a legenda de cada vídeo passa a ser calculada por conjunto: se o mesmo vídeo aparece em dois conjuntos, cada um mostra o texto certo para aquele conjunto, e não o do último.</p>
+</body>
+</html>
