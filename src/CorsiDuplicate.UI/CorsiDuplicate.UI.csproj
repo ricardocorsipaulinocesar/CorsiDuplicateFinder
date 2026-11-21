@@ -32,14 +32,16 @@
     <FileVersion>$(Version)</FileVersion>
   </PropertyGroup>
 
-  <!-- Builds installer\Output\CorsiDuplicateFinderSetup.exe right after a self-contained
+  <!-- Opt-in: only runs when asked for with -p:BuildInstaller=true, so an ordinary publish
+       just refreshes publish\ and leaves the installer and version.txt alone.
+       Builds installer\Output\CorsiDuplicateFinderSetup.exe right after a self-contained
        win-x64 Release publish, the same publish that "Publish" in Visual Studio's own
        Publish dialog produces when its profile is set to win-x64, self-contained, Release
        (see the README for the equivalent dotnet publish command line). Skipped, with a
        warning rather than an error, if Inno Setup isn't installed, so it never breaks an
        ordinary build/publish for someone who doesn't have it. -->
   <Target Name="BuildInstaller" AfterTargets="Publish"
-          Condition="'$(RuntimeIdentifier)' == 'win-x64' And '$(SelfContained)' == 'true' And '$(Configuration)' == 'Release'">
+          Condition="'$(BuildInstaller)' == 'true' And '$(RuntimeIdentifier)' == 'win-x64' And '$(SelfContained)' == 'true' And '$(Configuration)' == 'Release'">
     <PropertyGroup>
       <_InnoSetupCompiler Condition="'$(_InnoSetupCompiler)' == '' And Exists('$(LocalAppData)\Programs\Inno Setup 6\ISCC.exe')">$(LocalAppData)\Programs\Inno Setup 6\ISCC.exe</_InnoSetupCompiler>
       <_InnoSetupCompiler Condition="'$(_InnoSetupCompiler)' == '' And Exists('$(MSBuildProgramFiles32)\Inno Setup 6\ISCC.exe')">$(MSBuildProgramFiles32)\Inno Setup 6\ISCC.exe</_InnoSetupCompiler>
