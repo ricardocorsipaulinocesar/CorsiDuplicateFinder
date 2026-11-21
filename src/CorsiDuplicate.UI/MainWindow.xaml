@@ -6,11 +6,16 @@
         xmlns:local="clr-namespace:CorsiDuplicate.UI"
         xmlns:vm="clr-namespace:CorsiDuplicate.UI.ViewModels"
         xmlns:conv="clr-namespace:CorsiDuplicate.UI.Converters"
+        xmlns:ctl="clr-namespace:CorsiDuplicate.UI.Controls"
         mc:Ignorable="d"
         Title="{Binding WindowTitle}" Height="720" Width="1180"
         Icon="app.ico"
         Background="#15171C">
     <Window.Resources>
+      <ResourceDictionary>
+        <ResourceDictionary.MergedDictionaries>
+            <ResourceDictionary Source="Resources/Icons.xaml"/>
+        </ResourceDictionary.MergedDictionaries>
         <!-- Dark theme palette -->
         <SolidColorBrush x:Key="BgApp" Color="#15171C"/>
         <SolidColorBrush x:Key="Surface" Color="#1E2128"/>
@@ -275,6 +280,43 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <conv:AllEqualConverter x:Key="AllEqual"/>
+
+        <!-- Scan mode tile: highlighted while it is the active mode (Tag holds the mode name). -->
+        <Style x:Key="ModeTile" TargetType="Button" BasedOn="{StaticResource IconTile}">
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Style.Triggers>
+                <DataTrigger Value="True">
+                    <DataTrigger.Binding>
+                        <MultiBinding Converter="{StaticResource AllEqual}">
+                            <Binding Path="ScanMode"/>
+                            <Binding Path="Tag" RelativeSource="{RelativeSource Self}"/>
+                        </MultiBinding>
+                    </DataTrigger.Binding>
+                    <Setter Property="Background" Value="{StaticResource IconTileSelectedBrush}"/>
+                    <Setter Property="BorderBrush" Value="#8CAAF5"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Sort chip of a folder: highlighted while it is the folder's active filter (Tag = filter name). -->
+        <Style x:Key="SortChip" TargetType="Button" BasedOn="{StaticResource IconChip}">
+            <Setter Property="Foreground" Value="{StaticResource Ink.Sky}"/>
+            <Style.Triggers>
+                <DataTrigger Value="True">
+                    <DataTrigger.Binding>
+                        <MultiBinding Converter="{StaticResource AllEqual}">
+                            <Binding Path="ActiveFolderFilter"/>
+                            <Binding Path="Tag" RelativeSource="{RelativeSource Self}"/>
+                        </MultiBinding>
+                    </DataTrigger.Binding>
+                    <Setter Property="Background" Value="{StaticResource IconTileSelectedBrush}"/>
+                    <Setter Property="BorderBrush" Value="#8CAAF5"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+      </ResourceDictionary>
     </Window.Resources>
 
     <!-- Taskbar button: progress bar while files are being deleted. -->
@@ -293,111 +335,59 @@
 
         <!-- Toolbar -->
         <Border Grid.Row="0" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="16,10">
-            <StackPanel Orientation="Horizontal">
-                <Button Content="Scan folders" Style="{StaticResource PillPrimary}"
+            <DockPanel LastChildFill="True">
+                <Button Style="{StaticResource IconTilePrimary}" ctl:Icon.Data="{StaticResource Icon.Scan}" Foreground="{StaticResource Ink.Blue}"
+                        ToolTip="Scan folders: look for duplicates in the enabled folders"
                         Command="{Binding ScanCommand}" IsEnabled="{Binding IsScanning, Converter={StaticResource InverseBool}}"/>
-                <Button Content="Stop scan" Style="{StaticResource PillDanger}" Margin="8,0,0,0"
+                <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.Stop}" Foreground="{StaticResource Ink.Red}" Margin="8,0,0,0"
+                        ToolTip="Stop the scan in progress"
                         Command="{Binding StopScanCommand}" IsEnabled="{Binding IsScanning}"/>
 
-                <!-- Scan mode: "All" = photos and videos into duplicate Sets (as before);
-                     "Videos only" = skip photos and run the Contained analysis per folder. -->
-                <TextBlock Text="SCAN" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMuted}"
-                           VerticalAlignment="Center" Margin="12,0,8,0"/>
-                <Border BorderBrush="{StaticResource BorderStrong}" BorderThickness="1" CornerRadius="15" ClipToBounds="True"
-                        VerticalAlignment="Center"
-                        IsEnabled="{Binding IsScanning, Converter={StaticResource InverseBool}}"
-                        ToolTip="All: photos and videos, grouped into duplicate sets. Videos only: skips photos and also finds videos contained in longer ones (and compilations) in every folder.">
-                    <Border.Resources>
-                        <Style TargetType="Button" x:Key="ScanModeSegment">
-                            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
-                            <Setter Property="Background" Value="Transparent"/>
-                            <Setter Property="FontSize" Value="12"/>
-                            <Setter Property="FontWeight" Value="Bold"/>
-                            <Setter Property="Cursor" Value="Hand"/>
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="Button">
-                                        <Border Background="{TemplateBinding Background}" Padding="12,6" CornerRadius="14">
-                                            <ContentPresenter VerticalAlignment="Center"/>
-                                        </Border>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                            <Style.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Foreground" Value="{StaticResource Text}"/>
-                                </Trigger>
-                                <Trigger Property="IsEnabled" Value="False">
-                                    <Setter Property="Opacity" Value="0.5"/>
-                                </Trigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Resources>
-                    <StackPanel Orientation="Horizontal">
-                        <Button Content="All" Command="{Binding SetScanModeCommand}" CommandParameter="All"
-                                ToolTip="Photos and videos: looks for duplicates">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource ScanModeSegment}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsScanModeAll}" Value="True">
-                                            <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
-                                            <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                        <Button Content="Videos" Command="{Binding SetScanModeCommand}" CommandParameter="Videos"
-                                ToolTip="Skips photos: looks only for duplicate videos">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource ScanModeSegment}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsScanModeVideos}" Value="True">
-                                            <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
-                                            <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                        <Button Content="Videos+Contained" Command="{Binding SetScanModeCommand}" CommandParameter="VideosContained"
-                                ToolTip="Skips photos and, in each folder, compares every video with the others (ignores the similarity filter) to find excerpts and compilations">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource ScanModeSegment}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsScanModeVideosContained}" Value="True">
-                                            <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
-                                            <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                    </StackPanel>
-                </Border>
-                <Border Width="1" Background="{StaticResource Border}" Margin="10,2"/>
+                <Border Width="1" Background="{StaticResource Border}" Margin="12,2,12,2"/>
+                <!-- Scan mode: All = photos and videos into duplicate Sets; Videos = skip photos;
+                     Videos+Contained = skip photos and run the Contained analysis per folder. -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                            IsEnabled="{Binding IsScanning, Converter={StaticResource InverseBool}}">
+                    <Button Style="{StaticResource ModeTile}" Tag="All" ctl:Icon.Data="{StaticResource Icon.All}" Foreground="{StaticResource Ink.Sky}"
+                            Command="{Binding SetScanModeCommand}" CommandParameter="All"
+                            ToolTip="All: photos and videos, looks for duplicates"/>
+                    <Button Style="{StaticResource ModeTile}" Tag="Videos" ctl:Icon.Data="{StaticResource Icon.Videos}" Foreground="{StaticResource Ink.Blue}"
+                            Command="{Binding SetScanModeCommand}" CommandParameter="Videos"
+                            ToolTip="Videos: skips photos and looks only for duplicate videos"/>
+                    <Button Style="{StaticResource ModeTile}" Tag="VideosContained" ctl:Icon.Data="{StaticResource Icon.Contained}" Foreground="{StaticResource Ink.Violet}"
+                            Command="{Binding SetScanModeCommand}" CommandParameter="VideosContained"
+                            ToolTip="Videos + Contained: skips photos and, in each folder, compares every video with the others (ignores the similarity filter) to find excerpts and compilations"/>
+                </StackPanel>
+                <Border Width="1" Background="{StaticResource Border}" Margin="8,2,12,2"/>
 
-                <Border Background="{StaticResource SurfaceAlt}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="6" Padding="10,5" MinWidth="260"
+                <Border Background="{StaticResource SurfaceAlt}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="8" Padding="8,3"
+                        VerticalAlignment="Center"
                         IsEnabled="{Binding IsSimilarityEnabled}"
-                        ToolTipService.ShowOnDisabled="True">
+                        ToolTipService.ShowOnDisabled="True"
+                        ToolTip="Similarity: the minimum match for files to be grouped as duplicates (60-100%)">
                     <Border.Style>
                         <Style TargetType="Border">
                             <Style.Triggers>
                                 <Trigger Property="IsEnabled" Value="False">
                                     <Setter Property="Opacity" Value="0.45"/>
-                                    <Setter Property="ToolTip" Value="Not used in Videos+Contained: every video in the folder is compared"/>
+                                    <Setter Property="ToolTip" Value="Not used in Videos + Contained: every video in the folder is compared"/>
                                 </Trigger>
                             </Style.Triggers>
                         </Style>
                     </Border.Style>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="SIMILARITY" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <Slider x:Name="SimSlider" Minimum="60" Maximum="100" Width="140" VerticalAlignment="Center"
+                        <Viewbox Width="16" Height="16" VerticalAlignment="Center">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="{StaticResource Icon.Sim}" Stroke="{StaticResource Ink.Amber}" StrokeThickness="2"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                            </Canvas>
+                        </Viewbox>
+                        <Slider x:Name="SimSlider" Minimum="60" Maximum="100" Width="70" Margin="8,0,0,0" VerticalAlignment="Center"
                                 Value="{Binding SimilarityThreshold, Mode=TwoWay}"/>
-                        <TextBlock Text="{Binding SimilarityThreshold, StringFormat={}{0:0}%}" FontWeight="Bold" Foreground="{StaticResource AccentStrong}" Width="40" Margin="6,0,0,0"/>
+                        <TextBlock Text="{Binding SimilarityThreshold, StringFormat={}{0:0}%}" FontWeight="Bold" Foreground="{StaticResource AccentStrong}"
+                                   Width="34" Margin="6,0,0,0" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Border>
-
                 <!-- Regroup-in-progress: the similarity slider triggers a background
                      re-group (can involve heavy ORB structural matching) that previously
                      gave no visible sign anything was happening. Shown only while that's
@@ -436,7 +426,7 @@
                      app visibly reads as "working" instead of looking identical to any
                      other status message; reverts to the normal muted style once
                      finished/stopped. -->
-                <Border Background="{StaticResource SurfaceAlt}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="6" Padding="12,5" MinWidth="320">
+                <Border Background="{StaticResource SurfaceAlt}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="6" Padding="12,5" MinWidth="120" ToolTip="What the app is doing right now">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="STATUS" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -478,7 +468,7 @@
                     </StackPanel>
                 </StackPanel>
                 </Border>
-            </StackPanel>
+            </DockPanel>
         </Border>
 
         <!-- Scan progress: a thin hairline, visible only while a scan is running. -->
@@ -492,67 +482,31 @@
             <StackPanel>
                 <Border Background="{StaticResource SurfaceAlt}" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="16,8">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="FOLDERS" FontSize="10.5" FontWeight="Bold" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"/>
-                        <Border Background="{StaticResource AccentSoft}" BorderBrush="#736690F2" BorderThickness="1"
-                                CornerRadius="15" Padding="14,7" MinWidth="44" Margin="8,0,0,0">
-                            <TextBlock Text="{Binding FolderManager.Folders.Count}" FontSize="12" FontWeight="Bold"
-                                       Foreground="{StaticResource AccentStrong}" HorizontalAlignment="Center"/>
-                        </Border>
-                        <Button Content="+ Add folder" Style="{StaticResource PillNeutral}"
-                                Command="{Binding AddFolderCommand}" Margin="8,0,0,0"
-                                ToolTip="Select one or more folders to add at once"/>
-                        <Button Content="Folders" Style="{StaticResource PillNeutral}"
-                                Command="{Binding FolderManager.ToggleManageFoldersCommand}" Margin="6,0,0,0"
-                                ToolTip="Open the full-screen managed-folders list"/>
+                        <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.Folder}" Foreground="{StaticResource Ink.Amber}"
+                                Command="{Binding FolderManager.ToggleManageFoldersCommand}"
+                                ToolTip="Folders: open the list to add, enable or remove folders"/>
 
-                        <Border Width="1" Background="{StaticResource Border}" Margin="10,2" Height="20"/>
-                        <TextBlock Text="QUALITY" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextMuted}"
-                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <Button Content="High" Style="{StaticResource PillHq}"
+                        <Border Width="1" Background="{StaticResource Border}" Margin="12,2" Height="20"/>
+                        <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.Up}" Foreground="{StaticResource Ink.Green}"
                                 Command="{Binding ApplyHighQualityToAllCommand}"
-                                ToolTip="In every duplicate set across every folder, keep only the best copy unchecked"/>
-                        <Button Content="Low" Style="{StaticResource PillLq}" Margin="6,0,0,0"
+                                ToolTip="High quality: in every duplicate set across every folder, keep only the best copy unchecked"/>
+                        <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.Down}" Foreground="{StaticResource Ink.Red}" Margin="6,0,0,0"
                                 Command="{Binding ApplyLowQualityToAllCommand}"
-                                ToolTip="In every duplicate set across every folder, keep only the worst copy unchecked"/>
+                                ToolTip="Low quality: in every duplicate set across every folder, keep only the worst copy unchecked"/>
 
-                        <Border Width="1" Background="{StaticResource Border}" Margin="10,2" Height="20"/>
-                        <Button Content="Clean results" Style="{StaticResource PillNeutral}"
+                        <Border Width="1" Background="{StaticResource Border}" Margin="12,2" Height="20"/>
+                        <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.Clean}" Foreground="{StaticResource Ink.Cyan}"
                                 Command="{Binding ClearResultsCommand}"
-                                ToolTip="Clear every duplicate set currently shown, without re-scanning"/>
-                        <Button Content="Close all" Style="{StaticResource PillDanger}" Margin="6,0,0,0"
+                                ToolTip="Clean results: clear every duplicate set currently shown, without re-scanning"/>
+                        <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.Collapse}" Foreground="{StaticResource Ink.Blue}" Margin="6,0,0,0"
                                 Command="{Binding CollapseAllFoldersCommand}"
-                                ToolTip="Collapse every expanded folder, without clearing any results"/>
+                                ToolTip="Collapse all: close every expanded folder, without clearing any results"/>
 
                         <Border Width="1" Background="{StaticResource Border}" Margin="10,2" Height="20"/>
                         <Grid>
-                            <Button x:Name="ThumbnailsMenuButton" Style="{StaticResource PillNeutral}"
+                            <Button x:Name="ThumbnailsMenuButton" Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.Thumbs}" Foreground="{StaticResource Ink.Pink}"
                                     Command="{Binding ToggleThumbnailsMenuCommand}"
-                                    ToolTip="Choose how many thumbnails each video shows">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock FontWeight="Bold" FontSize="12">
-                                        <Run Text="Thumbnails: "/>
-                                        <Run Text="{Binding ThumbnailsPerVideo, Mode=OneWay}"/>
-                                    </TextBlock>
-                                    <TextBlock Text="&#9660;" FontSize="9" Margin="6,0,0,0" VerticalAlignment="Center" Opacity="0.7">
-                                        <TextBlock.RenderTransform>
-                                            <RotateTransform CenterX="4" CenterY="4"/>
-                                        </TextBlock.RenderTransform>
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsThumbnailsMenuOpen}" Value="True">
-                                                        <Setter Property="RenderTransform">
-                                                            <Setter.Value>
-                                                                <RotateTransform Angle="180" CenterX="4" CenterY="4"/>
-                                                            </Setter.Value>
-                                                        </Setter>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </StackPanel>
-                            </Button>
+                                    ToolTip="{Binding ThumbnailsPerVideo, StringFormat=Thumbnails per video: {0} (click to change)}"/>
                             <Popup IsOpen="{Binding IsThumbnailsMenuOpen}" StaysOpen="False" AllowsTransparency="True"
                                    Placement="Bottom" PlacementTarget="{Binding ElementName=ThumbnailsMenuButton}" VerticalOffset="6">
                                 <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource BorderStrong}" BorderThickness="1"
@@ -575,11 +529,11 @@
                                             <Border Grid.Column="1" BorderBrush="{StaticResource BorderStrong}" BorderThickness="1"
                                                     CornerRadius="8" ClipToBounds="True">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <Button Content="&#8722;" Width="28" Height="28" Style="{StaticResource StepperButton}"
+                                                    <Button Content="&#8722;" Width="28" Height="28" Style="{StaticResource StepperButton}" ToolTip="Fewer thumbnails per video"
                                                             Command="{Binding DecrementThumbnailsPerVideoCommand}"/>
                                                     <TextBlock Text="{Binding ThumbnailsPerVideo}" Width="34" TextAlignment="Center"
                                                                FontSize="13" FontWeight="Bold" Foreground="{StaticResource Text}" VerticalAlignment="Center"/>
-                                                    <Button Content="&#43;" Width="28" Height="28" Style="{StaticResource StepperButton}"
+                                                    <Button Content="&#43;" Width="28" Height="28" Style="{StaticResource StepperButton}" ToolTip="More thumbnails per video"
                                                             Command="{Binding IncrementThumbnailsPerVideoCommand}"/>
                                                 </StackPanel>
                                             </Border>
@@ -600,7 +554,7 @@
         <!-- Results: one collapsible node per folder -->
         <ScrollViewer Grid.Row="3" Padding="16" VerticalScrollBarVisibility="Auto" Background="{StaticResource BgApp}">
             <StackPanel>
-                <TextBlock Text="No duplicates found yet. Add a folder above and click Scan folders."
+                <TextBlock Text="No duplicates found yet. Open the folder list (folder icon) to add folders, then press the scan icon."
                            Visibility="{Binding HasAnyResults, Converter={StaticResource BoolToVisInverted}}"
                            Foreground="{StaticResource TextMuted}" Margin="8,40" HorizontalAlignment="Center" FontSize="13"/>
 
@@ -646,140 +600,27 @@
                                             <TextBlock Text="FILTER ALL RESULTS BY:" FontSize="9.5" FontWeight="Bold"
                                                        Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="0,0,8,0"/>
 
-                                            <Button Content="Thumb" Tag="Thumb" Click="FolderFilter_Click"
-                                                    ToolTip="Sort all results in this folder by thumbnail visual similarity">
-                                                <Button.Style>
-                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Thumb">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
-                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
-                                            <!-- Each of these carries one fixed direction (never both) — a
-                                                 single up or down arrow prefix says which, muted at rest and
-                                                 accent-colored once that filter is the active one. -->
-                                            <Button Content="&#9650; File" Tag="File" Click="FolderFilter_Click"
-                                                    ToolTip="Sort all results in this folder by file name (A→Z)">
-                                                <Button.Style>
-                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="File">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
-                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
-                                            <Button Content="&#9660; Size" Tag="Size" Click="FolderFilter_Click"
-                                                    ToolTip="Sort all results in this folder by file size (largest first)">
-                                                <Button.Style>
-                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Size">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
-                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
-                                            <Button Content="&#9660; Length" Tag="Length" Click="FolderFilter_Click"
-                                                    ToolTip="Sort all results in this folder by duration (longest first)">
-                                                <Button.Style>
-                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Length">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
-                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
-                                            <Button Content="&#9660; Resolution" Tag="Resolution" Click="FolderFilter_Click"
-                                                    ToolTip="Sort all results in this folder by resolution (highest first)">
-                                                <Button.Style>
-                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Resolution">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
-                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
-                                            <Button Content="&#9660; Bit rate" Tag="Bit rate" Click="FolderFilter_Click"
-                                                    ToolTip="Sort all results in this folder by bit rate (highest first)">
-                                                <Button.Style>
-                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Bit rate">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
-                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
-                                            <Button Content="&#9660; Audio" Tag="Audio" Click="FolderFilter_Click"
-                                                    ToolTip="Sort all results in this folder by audio sample rate (highest first)">
-                                                <Button.Style>
-                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Audio">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
-                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
-                                            <Button Content="&#9660; Match" Tag="Match" Click="FolderFilter_Click"
-                                                    ToolTip="Sort all results in this folder by match % (highest first)">
-                                                <Button.Style>
-                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Match">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
-                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
-                                            <Button Content="&#9650; Hash" Tag="Hash" Click="FolderFilter_Click"
-                                                    ToolTip="Sort all results in this folder by hash (A→Z)">
-                                                <Button.Style>
-                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Hash">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentStrong}"/>
-                                                                <Setter Property="Background" Value="{StaticResource AccentSoft}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
-                                            <Border Width="1" Height="16" Background="{StaticResource Border}" Margin="6,0" VerticalAlignment="Center"/>
-                                            <Button Content="&#10697; Contained" Tag="Contained" Click="FolderFilter_Click"
-                                                    ToolTip="Find videos in this folder that are an excerpt of another, longer video (click again to go back)">
-                                                <Button.Style>
-                                                    <Style TargetType="Button" BasedOn="{StaticResource FolderFilterLink}">
-                                                        <Setter Property="Foreground" Value="#B89AF5"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding ActiveFolderFilter}" Value="Contained">
-                                                                <Setter Property="Background" Value="#2E2645"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
+                                            <!-- One icon chip per field. Each carries one fixed direction; the active one is highlighted. -->
+                                            <Button Style="{StaticResource SortChip}" Tag="Thumb" ctl:Icon.Data="{StaticResource Icon.Image}" Click="FolderFilter_Click"
+                                                    ToolTip="Thumb: sort all results in this folder by thumbnail visual similarity"/>
+                                            <Button Style="{StaticResource SortChip}" Tag="File" ctl:Icon.Data="{StaticResource Icon.File}" Click="FolderFilter_Click"
+                                                    ToolTip="File: sort all results in this folder by file name (A to Z)"/>
+                                            <Button Style="{StaticResource SortChip}" Tag="Size" ctl:Icon.Data="{StaticResource Icon.Size}" Click="FolderFilter_Click"
+                                                    ToolTip="Size: sort all results in this folder by file size (largest first)"/>
+                                            <Button Style="{StaticResource SortChip}" Tag="Length" ctl:Icon.Data="{StaticResource Icon.Clock}" Click="FolderFilter_Click"
+                                                    ToolTip="Length: sort all results in this folder by duration (longest first)"/>
+                                            <Button Style="{StaticResource SortChip}" Tag="Resolution" ctl:Icon.Data="{StaticResource Icon.Resolution}" Click="FolderFilter_Click"
+                                                    ToolTip="Resolution: sort all results in this folder by resolution (highest first)"/>
+                                            <Button Style="{StaticResource SortChip}" Tag="Bit rate" ctl:Icon.Data="{StaticResource Icon.Bars}" Click="FolderFilter_Click"
+                                                    ToolTip="Bit rate: sort all results in this folder by bit rate (highest first)"/>
+                                            <Button Style="{StaticResource SortChip}" Tag="Audio" ctl:Icon.Data="{StaticResource Icon.Sound}" Click="FolderFilter_Click"
+                                                    ToolTip="Audio: sort all results in this folder by audio sample rate (highest first)"/>
+                                            <Button Style="{StaticResource SortChip}" Tag="Match" ctl:Icon.Data="{StaticResource Icon.Match}" Click="FolderFilter_Click"
+                                                    ToolTip="Match: sort all results in this folder by match % (highest first)"/>
+                                            <Button Style="{StaticResource SortChip}" Tag="Hash" ctl:Icon.Data="{StaticResource Icon.Hash}" Click="FolderFilter_Click"
+                                                    ToolTip="Hash: sort all results in this folder by hash (A to Z)"/>
+                                            <Button Style="{StaticResource SortChip}" Tag="Contained" ctl:Icon.Data="{StaticResource Icon.Contained}" Foreground="{StaticResource Ink.Violet}" Click="FolderFilter_Click"
+                                                    ToolTip="Contained: find videos in this folder that are an excerpt of another, longer video (click again to go back)"/>
                                         </StackPanel>
                                     </Border>
 
@@ -854,7 +695,7 @@
                                                                     <DataGridTemplateColumn Header="" Width="34">
                                                                         <DataGridTemplateColumn.CellTemplate>
                                                                             <DataTemplate>
-                                                                                <CheckBox HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                <CheckBox HorizontalAlignment="Center" VerticalAlignment="Center" ToolTip="Mark this file for deletion"
                                                                                           IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                                                             </DataTemplate>
                                                                         </DataGridTemplateColumn.CellTemplate>
@@ -879,7 +720,7 @@
                                                                             <DataTemplate>
                                                                                 <Border Background="{StaticResource SurfaceAlt}" CornerRadius="4" Margin="4"
                                                                                         Height="{Binding DataContext.ThumbnailColumnWidth, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                                        Cursor="Hand" Loaded="ThumbnailCell_Loaded"
+                                                                                        Cursor="Hand" Loaded="ThumbnailCell_Loaded" ToolTip="Click to open a preview"
                                                                                         MouseLeftButtonUp="ThumbnailBorder_MouseLeftButtonUp">
                                                                                     <Border.Width>
                                                                                         <MultiBinding Converter="{StaticResource FilmstripWidth}">
@@ -1120,8 +961,10 @@
                                     </TextBlock>
                                 </StackPanel>
                             </StackPanel>
-                            <Button Content="&#10005;" Style="{StaticResource MiniButton}" HorizontalAlignment="Right" VerticalAlignment="Top"
-                                    Command="{Binding FolderManager.CloseManageFoldersCommand}"/>
+                            <Button Style="{StaticResource IconChip}" ctl:Icon.Data="{StaticResource Icon.Close}" Foreground="{StaticResource Ink.Red}" Margin="0"
+                                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    Command="{Binding FolderManager.CloseManageFoldersCommand}"
+                                    ToolTip="Close the folders list"/>
                         </Grid>
                     </Border>
 
@@ -1154,7 +997,7 @@
                                 <GridViewColumn Header="On" Width="40">
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>
-                                            <CheckBox IsChecked="{Binding IsEnabled, Mode=TwoWay}"/>
+                                            <CheckBox IsChecked="{Binding IsEnabled, Mode=TwoWay}" ToolTip="Include this folder when scanning"/>
                                         </DataTemplate>
                                     </GridViewColumn.CellTemplate>
                                 </GridViewColumn>
@@ -1196,9 +1039,10 @@
                                 <GridViewColumn Header="" Width="80">
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>
-                                            <Button Content="Remove" Style="{StaticResource MiniButton}"
+                                            <Button Style="{StaticResource IconChip}" ctl:Icon.Data="{StaticResource Icon.Close}" Foreground="{StaticResource Ink.Red}" Margin="0"
                                                     Command="{Binding DataContext.FolderManager.RemoveFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                    CommandParameter="{Binding}"/>
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="Remove this folder from the list (no files are deleted)"/>
                                         </DataTemplate>
                                     </GridViewColumn.CellTemplate>
                                 </GridViewColumn>
@@ -1209,10 +1053,11 @@
                     <Border Grid.Row="2" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}"
                             BorderThickness="0,1,0,0" CornerRadius="0,0,10,10" Padding="20,12">
                         <StackPanel Orientation="Horizontal">
-                            <Button Content="+ Add folder" Style="{StaticResource PrimaryButton}"
-                                    Command="{Binding AddFolderCommand}"/>
-                            <Button Content="+ Add all subfolders" Style="{StaticResource ToolButton}" Margin="8,0,0,0"
-                                    ToolTip="Pick a parent folder and add each of its subfolders as a separate folder"
+                            <Button Style="{StaticResource IconTilePrimary}" ctl:Icon.Data="{StaticResource Icon.AddFolder}" Foreground="{StaticResource Ink.Amber}"
+                                    Command="{Binding AddFolderCommand}"
+                                    ToolTip="Add folders: select one or more folders to add at once"/>
+                            <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.SubFolders}" Foreground="{StaticResource Ink.Amber}" Margin="8,0,0,0"
+                                    ToolTip="Add all subfolders: pick a parent folder and add each of its subfolders as a separate folder"
                                     Command="{Binding FolderManager.AddSubfoldersCommand}"/>
                         </StackPanel>
                     </Border>
@@ -1240,7 +1085,7 @@
                     </TextBlock>
                     <StackPanel Grid.Row="1" Margin="0,4,0,10">
                         <TextBlock Text="{Binding FolderManager.SubfolderSummary}" Foreground="{StaticResource TextMuted}" FontSize="11.5"/>
-                        <CheckBox Content="Select all" Foreground="{StaticResource Text}" FontWeight="SemiBold" Margin="0,10,0,0"
+                        <CheckBox Content="Select all" Foreground="{StaticResource Text}" FontWeight="SemiBold" Margin="0,10,0,0" ToolTip="Check or uncheck every subfolder that is not already in the list"
                                   IsChecked="{Binding FolderManager.AllSubfoldersChecked}"/>
                     </StackPanel>
                     <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" MinHeight="60">
@@ -1248,7 +1093,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" Margin="18,3,0,3">
-                                        <CheckBox IsChecked="{Binding IsChecked}" IsEnabled="{Binding CanToggle}"
+                                        <CheckBox IsChecked="{Binding IsChecked}" IsEnabled="{Binding CanToggle}" ToolTip="Add this subfolder to the list"
                                                   Content="{Binding DisplayName}" Foreground="{StaticResource Text}"/>
                                         <TextBlock Text="  · already in the list" Foreground="{StaticResource TextMuted}" FontSize="11.5"
                                                    Visibility="{Binding IsAlreadyAdded, Converter={StaticResource BoolToVis}}"/>
@@ -1257,12 +1102,15 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
-                    <CheckBox Grid.Row="3" Content="Also include deeper levels (subfolders of subfolders)" Margin="0,10,0,0"
+                    <CheckBox Grid.Row="3" Content="Also include deeper levels (subfolders of subfolders)" Margin="0,10,0,0" ToolTip="Also list the subfolders inside each subfolder"
                               Foreground="{StaticResource Text}" IsChecked="{Binding FolderManager.IncludeDeeperLevels}"/>
                     <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-                        <Button Content="Cancel" Style="{StaticResource ToolButton}" Command="{Binding FolderManager.CancelSubfoldersCommand}"/>
-                        <Button Content="{Binding FolderManager.AddSubfoldersLabel}" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0"
-                                Command="{Binding FolderManager.ConfirmSubfoldersCommand}"/>
+                        <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.Close}" Foreground="{StaticResource Ink.Red}"
+                                Command="{Binding FolderManager.CancelSubfoldersCommand}"
+                                ToolTip="Cancel: add nothing"/>
+                        <Button Style="{StaticResource IconTilePrimary}" ctl:Icon.Data="{StaticResource Icon.Check}" Foreground="{StaticResource Ink.Green}" Margin="8,0,0,0"
+                                Command="{Binding FolderManager.ConfirmSubfoldersCommand}"
+                                ToolTip="{Binding FolderManager.AddSubfoldersLabel}"/>
                     </StackPanel>
                 </Grid>
             </Border>
