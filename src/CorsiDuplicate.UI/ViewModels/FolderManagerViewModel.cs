@@ -232,6 +232,13 @@ public partial class FolderManagerViewModel : ObservableObject
             ChangedSummary = previousOpen is null
                 ? "No folder changed since its last scan. Your selection was kept."
                 : "No folder changed since the last time the app was opened. Your selection was kept.";
+
+            // Visible notice (the footer text is easy to miss): nothing changed, nothing was touched.
+            Views.ThemedDialog.Show(
+                "Nenhuma pasta alterada",
+                previousOpen is null
+                    ? "Nenhuma pasta mudou desde o último scan dela. A sua seleção foi mantida como está."
+                    : "Nenhuma pasta mudou desde a última vez que o app foi aberto. A sua seleção foi mantida como está.");
         }
         else
         {
