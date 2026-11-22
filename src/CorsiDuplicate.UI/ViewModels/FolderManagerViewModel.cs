@@ -183,12 +183,9 @@ public partial class FolderManagerViewModel : ObservableObject
     [RelayCommand]
     private async Task SelectOnlyChangedAsync()
     {
-        if (ManagedFolderViewModel.PreviousOpenUtc is not { } previous)
-        {
-            ChangedSummary = "First launch: there is no previous opening to compare with, so nothing was changed.";
-            StatusChanged?.Invoke(ChangedSummary);
-            return;
-        }
+        // Reference time: the previous app opening. On the very first launch of this feature there
+        // is none yet, so each folder is compared with its own last scan instead (never scanned = changed).
+        var previousOpen = ManagedFolderViewModel.PreviousOpenUtc;
 
         var folders = Folders.ToList();
         ChangedSummary = "Checking which folders changed...";
@@ -208,7 +205,13 @@ public partial class FolderManagerViewModel : ObservableObject
                     folder.Model.LastModifiedUtc = last;
                 }
 
-                return last is { } t && t > previous;
+                if (last is not { } t)
+                {
+                    return false;
+                }
+
+                var reference = previousOpen ?? folder.Model.LastScannedUtc;
+                return reference is not { } r || t > r;
             }
             catch (Exception ex)
             {
@@ -226,7 +229,9 @@ public partial class FolderManagerViewModel : ObservableObject
         var changedCount = changedFlags.Count(c => c);
         if (changedCount == 0)
         {
-            ChangedSummary = "No folder changed since the last time the app was opened. Your selection was kept.";
+            ChangedSummary = previousOpen is null
+                ? "No folder changed since its last scan. Your selection was kept."
+                : "No folder changed since the last time the app was opened. Your selection was kept.";
         }
         else
         {
@@ -235,7 +240,8 @@ public partial class FolderManagerViewModel : ObservableObject
                 folders[i].IsEnabled = changedFlags[i];
             }
 
-            ChangedSummary = $"{changedCount} of {folders.Count} folder(s) changed since the last time the app was opened: only they are ticked.";
+            var since = previousOpen is null ? "their last scan" : "the last time the app was opened";
+            ChangedSummary = $"{changedCount} of {folders.Count} folder(s) changed since {since}: only they are ticked.";
         }
 
         Persist();
