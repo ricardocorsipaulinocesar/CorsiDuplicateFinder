@@ -43,6 +43,13 @@ public partial class FolderManagerViewModel : ObservableObject
         }
 
         var settings = _settingsStore.Load();
+
+        // Remember the previous launch time for "changed since last open", then stamp this launch.
+        ManagedFolderViewModel.PreviousOpenUtc = settings.LastOpenUtc;
+        _autoSelectChangedOnOpen = settings.AutoSelectChangedOnOpen;
+        settings.LastOpenUtc = DateTime.UtcNow;
+        _settingsStore.Save(settings);
+
         if (SortProperties.ContainsKey(settings.FolderSortKey))
         {
             _sortKey = settings.FolderSortKey;
@@ -148,6 +155,91 @@ public partial class FolderManagerViewModel : ObservableObject
         {
             Persist();
         }
+    }
+
+    // "Only changed": ticks the folders modified since the previous launch and unticks the rest.
+    [ObservableProperty]
+    private bool _autoSelectChangedOnOpen;
+
+    [ObservableProperty]
+    private string _changedSummary = "";
+
+    partial void OnAutoSelectChangedOnOpenChanged(bool value)
+    {
+        var settings = _settingsStore.Load();
+        settings.AutoSelectChangedOnOpen = value;
+        _settingsStore.Save(settings);
+    }
+
+    /// <summary>Called once at startup: applies the selection when the automatic switch is on.</summary>
+    public void RunStartupSelection()
+    {
+        if (AutoSelectChangedOnOpen)
+        {
+            _ = SelectOnlyChangedAsync();
+        }
+    }
+
+    [RelayCommand]
+    private async Task SelectOnlyChangedAsync()
+    {
+        if (ManagedFolderViewModel.PreviousOpenUtc is not { } previous)
+        {
+            ChangedSummary = "First launch: there is no previous opening to compare with, so nothing was changed.";
+            StatusChanged?.Invoke(ChangedSummary);
+            return;
+        }
+
+        var folders = Folders.ToList();
+        ChangedSummary = "Checking which folders changed...";
+        foreach (var folder in folders)
+        {
+            folder.IsCalculatingModified = true;
+        }
+
+        // Fresh check (not the cached "last modified"): files can change while the app is closed.
+        var changedFlags = await Task.WhenAll(folders.Select(async folder =>
+        {
+            try
+            {
+                var last = await Task.Run(() => FolderChangeDetector.GetLastChangeUtc(folder.Path));
+                if (last is not null)
+                {
+                    folder.Model.LastModifiedUtc = last;
+                }
+
+                return last is { } t && t > previous;
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error(nameof(FolderManagerViewModel), nameof(SelectOnlyChangedAsync),
+                    $"Could not check '{folder.Path}'.", ex);
+                return false;
+            }
+            finally
+            {
+                folder.IsCalculatingModified = false;
+                folder.RefreshFromModel();
+            }
+        }));
+
+        var changedCount = changedFlags.Count(c => c);
+        if (changedCount == 0)
+        {
+            ChangedSummary = "No folder changed since the last time the app was opened. Your selection was kept.";
+        }
+        else
+        {
+            for (var i = 0; i < folders.Count; i++)
+            {
+                folders[i].IsEnabled = changedFlags[i];
+            }
+
+            ChangedSummary = $"{changedCount} of {folders.Count} folder(s) changed since the last time the app was opened: only they are ticked.";
+        }
+
+        Persist();
+        StatusChanged?.Invoke(ChangedSummary);
     }
 
     private void AddAndTrack(ManagedFolderViewModel vm)

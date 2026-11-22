@@ -11,7 +11,60 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        DataContext = new MainViewModel();
+        var vm = new MainViewModel();
+        DataContext = vm;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(MainViewModel.TaskbarProgress) or nameof(MainViewModel.TaskbarState))
+            {
+                UpdateTaskbarBadge(vm);
+            }
+        };
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        Controls.TitleBarTheme.Apply(this);
+    }
+
+    private int _badgeShown = -1;
+
+    /// <summary>Small number badge on the taskbar icon with the overall percentage (hidden when idle or unmeasurable).</summary>
+    private void UpdateTaskbarBadge(MainViewModel vm)
+    {
+        int percent = vm.TaskbarState == System.Windows.Shell.TaskbarItemProgressState.Normal
+            ? (int)Math.Round(vm.TaskbarProgress * 100)
+            : -1;
+        if (percent == _badgeShown || TaskbarItemInfo is null)
+        {
+            return;
+        }
+
+        _badgeShown = percent;
+        if (percent < 0)
+        {
+            TaskbarItemInfo.Overlay = null;
+            return;
+        }
+
+        var visual = new System.Windows.Controls.Grid { Width = 32, Height = 32 };
+        visual.Children.Add(new System.Windows.Shapes.Ellipse { Fill = new SolidColorBrush(Color.FromRgb(0x66, 0x90, 0xF2)) });
+        visual.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = percent.ToString(),
+            Foreground = Brushes.White,
+            FontWeight = FontWeights.Bold,
+            FontSize = percent >= 100 ? 13 : 17,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        visual.Measure(new Size(32, 32));
+        visual.Arrange(new Rect(0, 0, 32, 32));
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(32, 32, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        bitmap.Freeze();
+        TaskbarItemInfo.Overlay = bitmap;
     }
 
     // Thumbnail images are only decoded for rows that are actually realized on screen.

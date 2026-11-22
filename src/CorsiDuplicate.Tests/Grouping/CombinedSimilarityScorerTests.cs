@@ -61,8 +61,22 @@ public class CombinedSimilarityScorerTests
 
         var result = CombinedSimilarityScorer.Similarity(a, b, structuralMatcher: structural);
 
-        Assert.Equal(95.0, result);
+        // A structural match alone is capped: it rescues, but never reaches "identical".
+        Assert.Equal(89.0, result);
         Assert.Equal(1, structural.CallCount);
+    }
+
+    [Fact]
+    public void Structural_or_histogram_signals_alone_never_reach_the_top_of_the_slider()
+    {
+        // Different photos of the same place: layout hash ~50% alike, but ORB says 100%.
+        var a = MakeItem(hashes: new ulong[] { 0UL });
+        var b = MakeItem(hashes: new ulong[] { 0x00000000FFFFFFFFUL });
+        var structural = new StubStructuralMatcher { ScoreToReturn = 100.0 };
+
+        var result = CombinedSimilarityScorer.Similarity(a, b, structuralMatcher: structural);
+
+        Assert.True(result < 90.0, $"expected a rescue-only score below 90, got {result}");
     }
 
     [Fact]

@@ -22,6 +22,12 @@ public partial class VideoPlayerWindow : Window
         _positionTimer.Start();
     }
 
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        Controls.TitleBarTheme.Apply(this);
+    }
+
     private void Player_MediaOpened(object sender, RoutedEventArgs e)
     {
         if (Player.NaturalDuration.HasTimeSpan)

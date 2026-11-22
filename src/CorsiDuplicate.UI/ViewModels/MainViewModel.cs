@@ -184,7 +184,140 @@ public partial class MainViewModel : ObservableObject
 
     public string AppVersion { get; } = $"v{typeof(MainViewModel).Assembly.GetName().Version}";
 
-    public string WindowTitle => $"Duplicate Finder {AppVersion}";
+    // Window title carries the overall percentage while something long runs, so it is readable
+    // on the taskbar thumbnail / Alt+Tab even when the window is minimized.
+    public string WindowTitle => ActivityText is { } activity
+        ? $"Duplicate Finder {AppVersion} — {activity}"
+        : $"Duplicate Finder {AppVersion}";
+
+    // Short "what is happening" text for the taskbar preview (Portuguese, like the delete dialog).
+    private string? ActivityText
+    {
+        get
+        {
+            if (IsDeleting)
+            {
+                return $"Excluindo {DeleteProgressText}";
+            }
+
+            var pct = OverallPercent;
+            if (IsScanning)
+            {
+                var what = StatusMessage.StartsWith("Comparing video", StringComparison.OrdinalIgnoreCase) ? "Comparando vídeos" : "Escaneando";
+                var folder = string.IsNullOrEmpty(_scanFolderName) ? "" : $" · {_scanFolderName}";
+                return pct is { } p ? $"{what} {p}%{folder}" : $"{what}…{folder}";
+            }
+
+            if (IsGeneratingThumbnails)
+            {
+                return pct is { } p ? $"Miniaturas {p}%" : "Miniaturas…";
+            }
+
+            if (IsRegrouping || IsProcessing)
+            {
+                return "Comparando…";
+            }
+
+            return null;
+        }
+    }
+
+    private string _scanFolderName = "";
+
+    // Overall progress of whatever is running: delete, scan (all folders together) or thumbnails.
+    // Null while the work has no measurable progress (enumerating, regrouping, Contained analysis).
+    private int _scanFolderIndex;
+    private int _scanFolderCount = 1;
+    private int _thumbsDone;
+    private int _thumbsTotal;
+
+    private int? OverallPercent
+    {
+        get
+        {
+            if (IsDeleting)
+            {
+                return (int)Math.Round(DeleteProgressFraction * 100);
+            }
+
+            if (IsScanning)
+            {
+                return IsProgressIndeterminate ? null : (int)Math.Round(TaskbarProgress * 100);
+            }
+
+            return IsGeneratingThumbnails && _thumbsTotal > 0 ? (int)Math.Round(TaskbarProgress * 100) : null;
+        }
+    }
+
+    public double TaskbarProgress
+    {
+        get
+        {
+            if (IsDeleting)
+            {
+                return DeleteProgressFraction;
+            }
+
+            if (IsScanning)
+            {
+                var fileFraction = ScanProgressTotal == 0 ? 0 : Math.Min(1.0, (double)ScanProgressCurrent / ScanProgressTotal);
+                return Math.Min(1.0, (_scanFolderIndex + fileFraction) / Math.Max(1, _scanFolderCount));
+            }
+
+            return _thumbsTotal == 0 ? 0 : Math.Min(1.0, (double)_thumbsDone / _thumbsTotal);
+        }
+    }
+
+    public TaskbarItemProgressState TaskbarState
+    {
+        get
+        {
+            if (IsDeleting)
+            {
+                return TaskbarItemProgressState.Normal;
+            }
+
+            if (IsScanning)
+            {
+                return IsProgressIndeterminate ? TaskbarItemProgressState.Indeterminate : TaskbarItemProgressState.Normal;
+            }
+
+            if (IsGeneratingThumbnails && _thumbsTotal > 0)
+            {
+                return TaskbarItemProgressState.Normal;
+            }
+
+            if (IsRegrouping || IsProcessing || IsGeneratingThumbnails)
+            {
+                return TaskbarItemProgressState.Indeterminate;
+            }
+
+            return DeleteTaskbarState;
+        }
+    }
+
+    private static readonly HashSet<string> TaskbarSources = new()
+    {
+        nameof(IsScanning), nameof(IsRegrouping), nameof(IsProcessing), nameof(IsGeneratingThumbnails),
+        nameof(IsDeleting), nameof(IsProgressIndeterminate), nameof(ScanProgressCurrent), nameof(ScanProgressTotal),
+        nameof(DeleteProgressCurrent), nameof(DeleteProgressTotal), nameof(DeleteTaskbarState),
+    };
+
+    protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (e.PropertyName is { } name && TaskbarSources.Contains(name))
+        {
+            NotifyTaskbar();
+        }
+    }
+
+    private void NotifyTaskbar()
+    {
+        base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(TaskbarState)));
+        base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(TaskbarProgress)));
+        base.OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(WindowTitle)));
+    }
 
     public MainViewModel()
     {
@@ -198,6 +331,7 @@ public partial class MainViewModel : ObservableObject
 
         FolderManager.FolderRemoved += OnFolderRemoved;
         FolderManager.StatusChanged += message => StatusMessage = message;
+        FolderManager.RunStartupSelection();
 
         var settings = _appSettingsStore.Load();
         ThumbnailsPerVideo = Math.Max(1, settings.ThumbnailsPerVideo);
@@ -1012,7 +1146,10 @@ public partial class MainViewModel : ObservableObject
                     break;
                 }
 
+                _scanFolderIndex = targets.IndexOf(folder);
+                _scanFolderCount = targets.Count;
                 var folderDisplayName = FolderDisplayName(folder.Path);
+                _scanFolderName = folderDisplayName;
                 StatusMessage = $"Enumerating files... - {folderDisplayName}";
                 IsProgressIndeterminate = true;
                 _currentFolderStartUtc = DateTime.UtcNow;
@@ -1080,7 +1217,15 @@ public partial class MainViewModel : ObservableObject
             // Grouping is done at this point, but thumbnails for the items it produced may
             // still be generating in the background — wait for those too before telling the
             // user the scan is finished, so "complete" only shows once everything actually is.
-            await WaitForPendingThumbnailsAsync();
+            // Stopping must be immediate: thumbnails still queued finish quietly in the background.
+            if (!cancelled)
+            {
+                await WaitForPendingThumbnailsAsync();
+            }
+            else
+            {
+                _pendingThumbnailTasks.Clear();
+            }
 
             if (cancelled)
             {
@@ -1342,6 +1487,8 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        _thumbsDone = 0;
+        _thumbsTotal = pending.Count;
         IsGeneratingThumbnails = true;
         var total = pending.Count;
         var done = 0;
@@ -1363,6 +1510,8 @@ public partial class MainViewModel : ObservableObject
             if (finished == total || finished % 10 == 0)
             {
                 StatusMessage = $"Generating thumbnails... {finished}/{total}";
+                _thumbsDone = finished;
+                NotifyTaskbar();
             }
         }));
 
@@ -1391,11 +1540,12 @@ public partial class MainViewModel : ObservableObject
 
         AppLogger.Info(nameof(MainViewModel), nameof(DeleteSelectedAsync), $"Deleting {selected.Count} selected file(s).");
 
-        var confirm = MessageBox.Show(
-            $"Move {selected.Count} file(s) ({MediaItemViewModel.FormatBytes(selected.Sum(i => i.SizeBytes))}) to the Recycle Bin?",
-            "Confirm delete", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        var confirmed = Views.ThemedDialog.Confirm(
+            "Mover para a Lixeira?",
+            $"{selected.Count} arquivo(s) ({MediaItemViewModel.FormatBytes(selected.Sum(i => i.SizeBytes))}) serão movidos para a Lixeira. Você pode restaurá-los de lá.",
+            Views.DialogKind.Warning, "Mover", "Cancelar");
 
-        if (confirm != MessageBoxResult.Yes)
+        if (!confirmed)
         {
             return;
         }
@@ -1518,18 +1668,20 @@ public partial class MainViewModel : ObservableObject
                 ? $"Delete cancelled: moved {deleted.Count} of {selected.Count} file(s) to the Recycle Bin."
                 : $"Moved {deleted.Count} file(s) to the Recycle Bin.";
             DeleteTaskbarState = TaskbarItemProgressState.None;
-            MessageBox.Show(
-                $"Moved {deleted.Count} file(s) ({MediaItemViewModel.FormatBytes(deleted.Sum(i => i.SizeBytes))}) to the Recycle Bin."
-                + (wasCancelled ? $"\n\nCancelled: {selected.Count - deleted.Count} file(s) were left untouched." : ""),
-                wasCancelled ? "Delete cancelled" : "Delete complete", MessageBoxButton.OK, MessageBoxImage.Information);
+            Views.ThemedDialog.Show(
+                wasCancelled ? "Exclusão cancelada" : "Exclusão concluída",
+                $"{deleted.Count} arquivo(s) ({MediaItemViewModel.FormatBytes(deleted.Sum(i => i.SizeBytes))}) movidos para a Lixeira."
+                + (wasCancelled ? $"\n\nCancelado: {selected.Count - deleted.Count} arquivo(s) não foram tocados." : ""),
+                wasCancelled ? Views.DialogKind.Warning : Views.DialogKind.Info);
         }
         else
         {
             StatusMessage = $"Moved {deleted.Count} file(s); {failures.Count} failed.";
             DeleteTaskbarState = TaskbarItemProgressState.Error;
-            MessageBox.Show(
-                $"Moved {deleted.Count} file(s) to the Recycle Bin.\n\n{failures.Count} file(s) could not be deleted:\n{string.Join("\n", failures)}",
-                "Delete completed with errors", MessageBoxButton.OK, MessageBoxImage.Error);
+            Views.ThemedDialog.Show(
+                "Exclusão concluída com erros",
+                $"{deleted.Count} arquivo(s) movidos para a Lixeira.\n\n{failures.Count} arquivo(s) não puderam ser excluídos:\n{string.Join("\n", failures)}",
+                Views.DialogKind.Error);
             DeleteTaskbarState = TaskbarItemProgressState.None;
         }
     }

@@ -35,9 +35,10 @@ public partial class App : Application
         AppLogger.Fatal(nameof(App), nameof(OnDispatcherUnhandledException),
             "Unhandled exception on the UI thread.", e.Exception);
 
-        MessageBox.Show(
-            $"An unexpected error occurred and was logged:\n\n{e.Exception.Message}\n\nThe application will keep running.",
-            "Unexpected error", MessageBoxButton.OK, MessageBoxImage.Warning);
+        Views.ThemedDialog.Show(
+            "Erro inesperado",
+            $"Ocorreu um erro inesperado e ele foi registrado no log:\n\n{e.Exception.Message}\n\nO aplicativo continua em execução.",
+            Views.DialogKind.Warning);
 
         // Without this, WPF terminates the whole process for any unhandled UI-thread
         // exception — this is what actually stops that from happening.

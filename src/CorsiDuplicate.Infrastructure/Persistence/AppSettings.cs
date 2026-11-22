@@ -11,4 +11,11 @@ public sealed class AppSettings
 
     // "All", "Videos" or "VideosContained"; null until first saved.
     public string? ScanMode { get; set; }
+
+    // When the app was last opened (UTC), updated at every launch; the "changed since last open"
+    // folder selection compares folder changes against the value read BEFORE this launch.
+    public DateTime? LastOpenUtc { get; set; }
+
+    // Folder manager: on launch, tick only the folders changed since the previous launch.
+    public bool AutoSelectChangedOnOpen { get; set; }
 }

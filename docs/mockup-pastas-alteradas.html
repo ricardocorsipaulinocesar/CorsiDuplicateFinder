@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup – pastas alteradas</title>
+<style>
+:root{--page:#0f1115;--text:#E8EAEF;--muted:#9AA1AD;--card:#1a1d24;--line:#2a2f3a;--acc:#6690F2;--ok:#3FCA80;--warn:#E8B34B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--text);font:14px "Segoe UI",system-ui,sans-serif;padding:24px 20px 60px;max-width:980px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:30px 0 4px;padding-top:12px;border-top:1px solid var(--line)}
+.sub{color:var(--muted);margin:0 0 12px}
+.sheet{background:#15171C;border:1px solid #333844;border-radius:10px;overflow:hidden}
+.head{background:#1E2128;padding:12px 16px;border-bottom:1px solid #333844;font-weight:700}
+.head small{display:block;font-weight:400;color:var(--muted);font-size:11.5px;margin-top:2px}
+.row{display:grid;grid-template-columns:34px 1fr 150px 90px;gap:8px;padding:7px 16px;border-bottom:1px solid #20242c;align-items:center;font-size:13px}
+.row.h{color:var(--muted);font-size:11.5px;background:#252932}
+.cb{width:15px;height:15px;border:1.5px solid #6a7283;border-radius:3px;display:inline-block}
+.cb.on{background:var(--acc);border-color:var(--acc)}
+.pill{background:#3A3020;border:1px solid #66E8B34B;color:var(--warn);border-radius:9px;padding:0 8px;font-size:10.5px;font-weight:700;margin-left:6px}
+.foot{background:#1E2128;padding:10px 16px;display:flex;gap:8px;align-items:center;border-top:1px solid #333844}
+.ib{height:34px;min-width:34px;border-radius:9px;background:linear-gradient(135deg,#242d3a,#181f28);border:1px solid #ffffff1c;display:inline-flex;align-items:center;justify-content:center;padding:0 9px;font-size:12px;color:#E8BB67;gap:6px}
+.ib.hl{border-color:var(--acc);color:#8CAAF5}
+.note{color:var(--muted);font-size:12.5px;line-height:1.5;margin-top:10px}
+.tag{font-size:11px;font-weight:700;color:var(--ok);margin-left:6px}
+.toast{margin:10px 16px;background:#252932;border:1px solid #454C5B;border-radius:8px;padding:8px 12px;font-size:12.5px}
+</style></head><body>
+<h1>Selecionar só as pastas que mudaram</h1>
+<p class="sub">Na janela de pastas, um ícone novo marca para o scan <b>apenas</b> as pastas alteradas desde a última vez que o app foi aberto e desmarca as outras. As pastas continuam na lista, só mudam de marcada para desmarcada.</p>
+
+<h2>A. Botão no rodapé <span class="tag">recomendada</span></h2>
+<div class="sheet">
+ <div class="head">Managed folders<small>5 folder(s) tracked</small></div>
+ <div class="row h"><span>On</span><span>Folder path</span><span>Last modified</span><span>Items</span></div>
+ <div class="row"><span class="cb on"></span><span>D:\Fotos\2024-Praia <span class="pill">changed since last open</span></span><span>hoje 09:14</span><span>312</span></div>
+ <div class="row"><span class="cb"></span><span>D:\Fotos\2023-Natal</span><span>12/01/2024</span><span>188</span></div>
+ <div class="row"><span class="cb on"></span><span>D:\Videos\Viagem <span class="pill">changed since last open</span></span><span>ontem 22:40</span><span>41</span></div>
+ <div class="row"><span class="cb"></span><span>D:\Videos\Antigos</span><span>03/05/2022</span><span>96</span></div>
+ <div class="row"><span class="cb"></span><span>D:\Backup\Celular</span><span>20/08/2023</span><span>1.204</span></div>
+ <div class="toast">2 de 5 pastas mudaram desde a última abertura: só elas ficam marcadas.</div>
+ <div class="foot"><span class="ib">＋📁</span><span class="ib">📂⤵</span><span class="ib hl">✓ Só alteradas</span></div>
+</div>
+<p class="note">Você clica quando quiser. Mostra um aviso com quantas pastas foram marcadas. Se nenhuma mudou, avisa e não altera nada.</p>
+
+<h2>B. Automático ao abrir o app</h2>
+<div class="sheet">
+ <div class="head">Managed folders<small>5 folder(s) tracked</small></div>
+ <div class="foot"><span class="ib">＋📁</span><span class="ib">📂⤵</span><span class="ib hl">☑ Marcar alteradas ao abrir o app</span></div>
+</div>
+<p class="note">Uma chave liga/desliga. Ligada, toda vez que o app abre ele já deixa marcadas só as pastas alteradas desde a abertura anterior. Sem clique, mas sua seleção manual anterior é substituída a cada abertura.</p>
+
+<h2>C. As duas juntas</h2>
+<p class="note">Botão "Só alteradas" (A) mais a chave automática (B). A chave vem desligada.</p>
+
+<h2>Como defino "alterada desde a última abertura"</h2>
+<p class="note">O app guarda a data/hora de cada abertura. Uma pasta conta como alterada se qualquer arquivo ou subpasta dentro dela teve modificação depois da <b>abertura anterior</b> (a mesma verificação do selo "changed since scan" que já existe, mas comparando com a abertura em vez do último scan). Na primeira vez, sem abertura anterior, nenhuma pasta é considerada alterada.</p>
+</body></html>

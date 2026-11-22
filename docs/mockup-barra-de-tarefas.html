@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup – app minimizado</title>
+<style>
+:root{--page:#0f1115;--text:#E8EAEF;--muted:#9AA1AD;--card:#1a1d24;--line:#2a2f3a;--acc:#6690F2;--ok:#3FCA80}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--text);font:14px "Segoe UI",system-ui,sans-serif;padding:24px 20px 60px;max-width:980px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:32px 0 4px;padding-top:12px;border-top:1px solid var(--line)}
+.sub{color:var(--muted);margin:0 0 14px}
+.opt{background:var(--card);border-radius:12px;padding:16px;margin-bottom:12px}
+.scene{background:linear-gradient(160deg,#2b3a55,#1b2233);border-radius:10px;height:230px;position:relative;overflow:hidden}
+.bar{position:absolute;left:0;right:0;bottom:0;height:44px;background:#14181fcc;border-top:1px solid #ffffff18;display:flex;align-items:center;padding-left:16px;gap:10px}
+.ico{width:36px;height:36px;border-radius:8px;background:#ffffff10;display:flex;align-items:center;justify-content:center;position:relative}
+.ico i{width:20px;height:20px;border-radius:6px;background:var(--acc);display:block}
+.prog{position:absolute;left:3px;right:3px;bottom:1px;height:4px;border-radius:2px;background:#ffffff25;overflow:hidden}
+.prog b{display:block;height:100%;width:42%;background:var(--ok)}
+.badge{position:absolute;right:-4px;top:-5px;background:var(--acc);color:#fff;font:700 10px "Segoe UI";border-radius:9px;padding:1px 5px;border:1px solid #14181f}
+.thumb{position:absolute;left:8px;bottom:52px;width:260px;background:#242a36;border:1px solid #ffffff22;border-radius:8px;padding:8px;box-shadow:0 8px 24px #0008}
+.thumb .t{font-size:12px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thumb .t small{color:var(--muted)}
+.thumb .win{height:90px;border-radius:5px;background:#15171c;border:1px solid #333844;position:relative}
+.thumb .win:before{content:"";position:absolute;left:0;right:0;top:0;height:14px;background:#1E2128;border-bottom:1px solid #333844;border-radius:5px 5px 0 0}
+.btns{display:flex;gap:6px;margin-top:6px;justify-content:center}
+.btns span{width:34px;height:22px;border-radius:5px;background:#ffffff14;display:flex;align-items:center;justify-content:center;font-size:11px;color:#EA6F64}
+.tip{color:var(--muted);font-size:12.5px;margin-top:10px;line-height:1.5}
+.tag{display:inline-block;font-size:11px;font-weight:700;color:var(--ok);margin-left:6px}
+</style></head><body>
+<h1>Passar o mouse no app minimizado</h1>
+<p class="sub">O Windows só deixa mostrar, na prévia da barra de tarefas, o <b>título da janela</b>, o <b>botão com a barra de progresso</b>, um <b>emblema pequeno</b> e até 7 <b>botões de ação</b>. Não dá para desenhar um balão livre. Três formas de usar isso:</p>
+
+<h2>A. Título com o que está fazendo e a %</h2>
+<div class="opt">
+ <div class="scene"><div class="thumb"><div class="t">Duplicate Finder v1.0.0.14 — <b>Escaneando 42%</b> <small>· Fotos 2024</small></div><div class="win"></div></div>
+  <div class="bar"><div class="ico"><i></i><div class="prog"><b></b></div></div></div></div>
+ <div class="tip">Barra verde no botão + título que muda: <b>Escaneando 42% · Fotos 2024</b>, <b>Miniaturas 70%</b>, <b>Excluindo 12 de 44</b>, <b>Comparando vídeos…</b> (sem %). Simples e sem peça nova. O título é cortado se for longo, então mantenho curto.</div>
+</div>
+
+<h2>B. A + emblema com a % sobre o ícone <span class="tag">recomendada</span></h2>
+<div class="opt">
+ <div class="scene"><div class="thumb"><div class="t">Duplicate Finder v1.0.0.14 — <b>Escaneando 42%</b> <small>· Fotos 2024</small></div><div class="win"></div></div>
+  <div class="bar"><div class="ico"><i></i><span class="badge">42</span><div class="prog"><b></b></div></div></div></div>
+ <div class="tip">Igual à A, mais um numerozinho no canto do ícone: dá para ler a % sem passar o mouse. Some quando termina.</div>
+</div>
+
+<h2>C. B + botão Parar na prévia</h2>
+<div class="opt">
+ <div class="scene"><div class="thumb"><div class="t">Duplicate Finder v1.0.0.14 — <b>Escaneando 42%</b> <small>· Fotos 2024</small></div><div class="win"></div>
+  <div class="btns"><span title="Parar">■</span></div></div>
+  <div class="bar"><div class="ico"><i></i><span class="badge">42</span><div class="prog"><b></b></div></div></div></div>
+ <div class="tip">Tudo da B, mais um botão ■ embaixo da prévia para interromper o scan (ou cancelar a exclusão) sem restaurar a janela. Só aparece enquanto algo está rodando.</div>
+</div>
+
+<p class="sub" style="margin-top:24px">Textos em português, como na janela de exclusão. Diga qual (A, B ou C) e se quer ajustar algum texto.</p>
+</body></html>

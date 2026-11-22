@@ -4,6 +4,24 @@
              xmlns:local="clr-namespace:CorsiDuplicate.UI"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        <!-- Tooltips in the app palette instead of the stock pale-yellow box. -->
+        <Style TargetType="ToolTip">
+            <Setter Property="Background" Value="#252932"/>
+            <Setter Property="Foreground" Value="#E8EAEF"/>
+            <Setter Property="BorderBrush" Value="#454C5B"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="9,5"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToolTip">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Application.Resources>
 </Application>

@@ -46,6 +46,12 @@ public partial class ManagedFolderViewModel : ObservableObject
     public bool IsChangedSinceScan =>
         Model.LastModifiedUtc is { } modified && Model.LastScannedUtc is { } scanned && modified > scanned;
 
+    // Time of the launch before this one (set by FolderManagerViewModel); null on the very first run.
+    public static DateTime? PreviousOpenUtc { get; set; }
+
+    public bool IsChangedSinceLastOpen =>
+        PreviousOpenUtc is { } opened && Model.LastModifiedUtc is { } modified && modified > opened;
+
     public string ItemCountDisplay => Model.ItemCount > 0 ? $"{Model.ItemCount:N0} files" : "—";
 
     // Sort keys: unknown dates/counts sort as the oldest/smallest.
@@ -60,6 +66,7 @@ public partial class ManagedFolderViewModel : ObservableObject
         OnPropertyChanged(nameof(LastModifiedDisplay));
         OnPropertyChanged(nameof(LastModifiedRelative));
         OnPropertyChanged(nameof(IsChangedSinceScan));
+        OnPropertyChanged(nameof(IsChangedSinceLastOpen));
         OnPropertyChanged(nameof(LastModifiedSortKey));
         OnPropertyChanged(nameof(LastScannedSortKey));
         OnPropertyChanged(nameof(ItemCountSortKey));

@@ -16,7 +16,9 @@ public sealed class OrbStructuralMatcher : IStructuralMatcher, IDisposable
     private const double LoweRatioThreshold = 0.75;
     private const int MinGoodMatches = 8;
 
-    private readonly ORB _orb = ORB.Create(500);
+    // Created on first use: loading the OpenCV native library at app start delayed the window by seconds.
+    private readonly Lazy<ORB> _orbLazy = new(() => ORB.Create(500));
+    private ORB _orb => _orbLazy.Value;
     private readonly Dictionary<string, OrbFeatures?> _cache = new();
 
     public double Match(string imagePathA, string imagePathB)
@@ -115,7 +117,10 @@ public sealed class OrbStructuralMatcher : IStructuralMatcher, IDisposable
     public void Dispose()
     {
         ClearCache();
-        _orb.Dispose();
+        if (_orbLazy.IsValueCreated)
+        {
+            _orb.Dispose();
+        }
     }
 
     private sealed record OrbFeatures(KeyPoint[] Keypoints, Mat Descriptors);

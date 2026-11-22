@@ -46,7 +46,16 @@ public static class CombinedSimilarityScorer
     private const double PersonCorroborationFloor = 40.0;
 
     /// <summary>The nudge never pushes the score above this — same person isn't the same photo.</summary>
-    private const double PersonCorroborationCeiling = 90.0;
+    private const double PersonCorroborationCeiling = 89.0;
+
+    /// <summary>
+    /// The secondary signals (colour histogram, ORB structure, shared person) only RESCUE a pair
+    /// the picture hash doubts, so they can never score above this. Only the hash itself, or an
+    /// identical file, can reach the top of the slider: before this cap, two different shots of
+    /// the same place could get 100% from ORB alone (every match fits one homography) and showed
+    /// up as "duplicates" with the slider at 100%.
+    /// </summary>
+    private const double RescueCeiling = 89.0;
 
     private const double PersonCorroborationBoost = 10.0;
 
@@ -105,7 +114,7 @@ public static class CombinedSimilarityScorer
             && hashSimilarity is > HistogramRescueFloor and < StructuralCheckCeiling)
         {
             var histogramSimilarity = Math.Clamp(histogramComparer.Compare(histA, histB), 0.0, 1.0) * 100.0;
-            best = Math.Max(best, Math.Min(histogramSimilarity, hashSimilarity + HistogramBoostCap));
+            best = Math.Max(best, Math.Min(Math.Min(histogramSimilarity, hashSimilarity + HistogramBoostCap), RescueCeiling));
         }
 
         // ORB structural matching operates on a single decoded image; for now it only
@@ -113,7 +122,7 @@ public static class CombinedSimilarityScorer
         if (structuralMatcher is not null && a.Kind == MediaKind.Photo && hashSimilarity is > StructuralCheckFloor and < StructuralCheckCeiling)
         {
             var structuralScore = structuralMatcher.Match(a.FullPath, b.FullPath);
-            best = Math.Max(best, structuralScore);
+            best = Math.Max(best, Math.Min(structuralScore, RescueCeiling));
         }
 
         if (best is > PersonCorroborationFloor and < PersonCorroborationCeiling && SharePersonCluster(a, b))

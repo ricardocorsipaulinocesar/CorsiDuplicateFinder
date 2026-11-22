@@ -20,6 +20,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>app.ico</ApplicationIcon>
+    <!-- Startup: precompiled (ReadyToRun) code skips most JIT work when the window opens;
+         only applies to the self-contained win-x64 publish. -->
+    <PublishReadyToRun Condition="'$(RuntimeIdentifier)' == 'win-x64'">true</PublishReadyToRun>
+    <TieredPGO>false</TieredPGO>
   </PropertyGroup>
 
   <!-- Single source of the app version: shown in the status bar, stamped on the exe and

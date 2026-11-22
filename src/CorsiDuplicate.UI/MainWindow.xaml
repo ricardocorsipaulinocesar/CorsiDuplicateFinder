@@ -320,9 +320,9 @@
       </ResourceDictionary>
     </Window.Resources>
 
-    <!-- Taskbar button: progress bar while files are being deleted. -->
+    <!-- Taskbar button: overall progress of the scan, thumbnails or delete (also shown minimized). -->
     <Window.TaskbarItemInfo>
-        <TaskbarItemInfo ProgressState="{Binding DeleteTaskbarState}" ProgressValue="{Binding DeleteProgressFraction}"/>
+        <TaskbarItemInfo ProgressState="{Binding TaskbarState}" ProgressValue="{Binding TaskbarProgress}"/>
     </Window.TaskbarItemInfo>
 
     <Grid>
@@ -361,8 +361,8 @@
                 </StackPanel>
                 <Border Width="1" Background="{StaticResource Border}" Margin="8,2,12,2"/>
 
-                <Border Background="{StaticResource SurfaceAlt}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="8" Padding="8,3"
-                        VerticalAlignment="Center"
+                <Border Background="{StaticResource SurfaceAlt}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="6" Padding="10,0"
+                        VerticalAlignment="Stretch" Margin="0,0,8,0"
                         IsEnabled="{Binding IsSimilarityEnabled}"
                         ToolTipService.ShowOnDisabled="True"
                         ToolTip="Similarity: the minimum match for files to be grouped as duplicates (60-100%)">
@@ -376,7 +376,7 @@
                             </Style.Triggers>
                         </Style>
                     </Border.Style>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Viewbox Width="16" Height="16" VerticalAlignment="Center">
                             <Canvas Width="24" Height="24">
                                 <Path Data="{StaticResource Icon.Sim}" Stroke="{StaticResource Ink.Amber}" StrokeThickness="2"
@@ -924,6 +924,26 @@
                             <Style TargetType="{x:Type ListViewItem}">
                                 <Setter Property="Foreground" Value="{StaticResource Text}"/>
                                 <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="{x:Type ListViewItem}">
+                                            <Border x:Name="Row" Background="{TemplateBinding Background}" Padding="2,3" SnapsToDevicePixels="True">
+                                                <GridViewRowPresenter Content="{TemplateBinding Content}"
+                                                                      Columns="{Binding Path=View.Columns, RelativeSource={RelativeSource AncestorType={x:Type ListView}}}"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Row" Property="Background" Value="#1AFFFFFF"/>
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="Row" Property="Background" Value="{StaticResource AccentSoft}"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource Text}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
                             </Style>
                             <Style TargetType="{x:Type GridViewColumnHeader}">
                                 <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
@@ -973,6 +993,12 @@
                                                         Visibility="{Binding IsChangedSinceScan, Converter={StaticResource BoolToVis}}">
                                                     <TextBlock Text="changed since scan" FontSize="10.5" FontWeight="Bold" Foreground="#E8B34B"/>
                                                 </Border>
+                                                <Border Background="#1F2B45" BorderBrush="#666690F2" BorderThickness="1" CornerRadius="9"
+                                                        Padding="8,0" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                        ToolTip="Modified after the app was last opened"
+                                                        Visibility="{Binding IsChangedSinceLastOpen, Converter={StaticResource BoolToVis}}">
+                                                    <TextBlock Text="changed since last open" FontSize="10.5" FontWeight="Bold" Foreground="#8CAAF5"/>
+                                                </Border>
                                             </StackPanel>
                                         </DataTemplate>
                                     </GridViewColumn.CellTemplate>
@@ -1010,6 +1036,15 @@
                             <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.SubFolders}" Foreground="{StaticResource Ink.Amber}" Margin="8,0,0,0"
                                     ToolTip="Add all subfolders: pick a parent folder and add each of its subfolders as a separate folder"
                                     Command="{Binding FolderManager.AddSubfoldersCommand}"/>
+                            <Border Width="1" Background="{StaticResource Border}" Margin="12,2,12,2"/>
+                            <Button Style="{StaticResource IconTile}" ctl:Icon.Data="{StaticResource Icon.Changed}" Foreground="{StaticResource Ink.Sky}"
+                                    ToolTip="Only changed: tick just the folders modified since the app was last opened and untick the others"
+                                    Command="{Binding FolderManager.SelectOnlyChangedCommand}"/>
+                            <CheckBox Content="Auto on open" Foreground="{StaticResource Text}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                      ToolTip="When the app opens, automatically tick only the folders changed since the previous opening"
+                                      IsChecked="{Binding FolderManager.AutoSelectChangedOnOpen}"/>
+                            <TextBlock Text="{Binding FolderManager.ChangedSummary}" Foreground="{StaticResource TextMuted}" FontSize="11.5"
+                                       VerticalAlignment="Center" Margin="14,0,0,0" TextTrimming="CharacterEllipsis" MaxWidth="560"/>
                         </StackPanel>
                     </Border>
                 </Grid>

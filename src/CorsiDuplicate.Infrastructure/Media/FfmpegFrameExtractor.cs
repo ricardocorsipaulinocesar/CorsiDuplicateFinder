@@ -139,6 +139,11 @@ public sealed class FfmpegFrameExtractor
 
             using var process = new Process { StartInfo = startInfo };
             process.Start();
+            // Stop button: kill ffmpeg at once instead of letting it run to the end of the file.
+            await using var killOnCancel = ct.Register(() =>
+            {
+                try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            });
             var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
             var stderrTask = process.StandardError.ReadToEndAsync(ct);
             await process.WaitForExitAsync(ct);
