@@ -37,6 +37,7 @@ public partial class FolderManagerViewModel : ObservableObject
 
     public FolderManagerViewModel()
     {
+        Folders.CollectionChanged += (_, _) => OnPropertyChanged(nameof(AllFoldersEnabled));
         foreach (var folder in _store.Load())
         {
             AddAndTrack(new ManagedFolderViewModel(folder));
@@ -255,6 +256,31 @@ public partial class FolderManagerViewModel : ObservableObject
         StatusChanged?.Invoke(ChangedSummary);
     }
 
+    // Header checkbox of the grid: ticked = every folder on, unticked = none, mixed = some.
+    public bool? AllFoldersEnabled
+    {
+        get
+        {
+            if (Folders.Count == 0)
+            {
+                return false;
+            }
+
+            var enabled = Folders.Count(f => f.IsEnabled);
+            return enabled == Folders.Count ? true : enabled == 0 ? false : null;
+        }
+        set
+        {
+            var target = value == true;
+            foreach (var folder in Folders.ToList())
+            {
+                folder.IsEnabled = target;
+            }
+
+            OnPropertyChanged();
+        }
+    }
+
     private void AddAndTrack(ManagedFolderViewModel vm)
     {
         vm.PropertyChanged += (_, e) =>
@@ -262,6 +288,7 @@ public partial class FolderManagerViewModel : ObservableObject
             if (e.PropertyName == nameof(ManagedFolderViewModel.IsEnabled))
             {
                 Persist();
+                OnPropertyChanged(nameof(AllFoldersEnabled));
             }
         };
         Folders.Add(vm);

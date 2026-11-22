@@ -965,7 +965,11 @@
                         </ListView.Resources>
                         <ListView.View>
                             <GridView>
-                                <GridViewColumn Header="On" Width="40">
+                                <GridViewColumn Width="40">
+                                    <GridViewColumn.Header>
+                                        <CheckBox IsChecked="{Binding FolderManager.AllFoldersEnabled, Mode=TwoWay}"
+                                                  ToolTip="Select or unselect every folder for the scan"/>
+                                    </GridViewColumn.Header>
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>
                                             <CheckBox IsChecked="{Binding IsEnabled, Mode=TwoWay}" ToolTip="Include this folder when scanning"/>
