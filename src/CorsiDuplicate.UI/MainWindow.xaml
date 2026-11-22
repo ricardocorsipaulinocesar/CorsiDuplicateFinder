@@ -976,12 +976,12 @@
                                         </DataTemplate>
                                     </GridViewColumn.CellTemplate>
                                 </GridViewColumn>
-                                <GridViewColumn Width="460" DisplayMemberBinding="{Binding Path}">
+                                <GridViewColumn Width="330" DisplayMemberBinding="{Binding Path}">
                                     <GridViewColumnHeader Content="{Binding FolderManager.PathHeader}" Style="{StaticResource SortableFolderHeader}"
                                                           Command="{Binding FolderManager.SortByCommand}" CommandParameter="Path"
                                                           ToolTip="Click to sort by folder path"/>
                                 </GridViewColumn>
-                                <GridViewColumn Width="300">
+                                <GridViewColumn Width="200">
                                     <GridViewColumnHeader Content="{Binding FolderManager.LastModifiedHeader}" Style="{StaticResource SortableFolderHeader}"
                                                           Command="{Binding FolderManager.SortByCommand}" CommandParameter="LastModified"
                                                           ToolTip="Click to sort by the most recent change inside each folder"/>
@@ -991,33 +991,42 @@
                                                 <TextBlock Text="{Binding LastModifiedDisplay}"/>
                                                 <TextBlock Text="{Binding LastModifiedRelative}" Foreground="{StaticResource TextMuted}"
                                                            FontSize="11" Margin="6,0,0,0" VerticalAlignment="Center"/>
-                                                <Border Background="#3A3020" BorderBrush="#66E8B34B" BorderThickness="1" CornerRadius="9"
-                                                        Padding="8,0" Margin="8,0,0,0" VerticalAlignment="Center"
-                                                        ToolTip="Modified after the last scan — scan again to pick up the changes"
-                                                        Visibility="{Binding IsChangedSinceScan, Converter={StaticResource BoolToVis}}">
-                                                    <TextBlock Text="changed since scan" FontSize="10.5" FontWeight="Bold" Foreground="#E8B34B"/>
-                                                </Border>
-                                                <Border Background="#1F2B45" BorderBrush="#666690F2" BorderThickness="1" CornerRadius="9"
-                                                        Padding="8,0" Margin="6,0,0,0" VerticalAlignment="Center"
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <!-- Own column for the change badges, so they are never cut off by the date column. -->
+                                <GridViewColumn Header="Changes" Width="270">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Border Background="#1F2B45" BorderBrush="#8CAAF5" BorderThickness="1" CornerRadius="9"
+                                                        Padding="8,1" Margin="0,0,6,0" VerticalAlignment="Center"
                                                         ToolTip="Modified after the app was last opened"
                                                         Visibility="{Binding IsChangedSinceLastOpen, Converter={StaticResource BoolToVis}}">
-                                                    <TextBlock Text="changed since last open" FontSize="10.5" FontWeight="Bold" Foreground="#8CAAF5"/>
+                                                    <TextBlock Text="changed since last open" FontSize="11" FontWeight="Bold" Foreground="#8CAAF5"/>
+                                                </Border>
+                                                <Border Background="#3A3020" BorderBrush="#66E8B34B" BorderThickness="1" CornerRadius="9"
+                                                        Padding="8,1" VerticalAlignment="Center"
+                                                        ToolTip="Modified after the last scan — scan again to pick up the changes"
+                                                        Visibility="{Binding IsChangedSinceScan, Converter={StaticResource BoolToVis}}">
+                                                    <TextBlock Text="changed since scan" FontSize="11" FontWeight="Bold" Foreground="#E8B34B"/>
                                                 </Border>
                                             </StackPanel>
                                         </DataTemplate>
                                     </GridViewColumn.CellTemplate>
                                 </GridViewColumn>
-                                <GridViewColumn Width="150" DisplayMemberBinding="{Binding LastScannedDisplay}">
+                                <GridViewColumn Width="130" DisplayMemberBinding="{Binding LastScannedDisplay}">
                                     <GridViewColumnHeader Content="{Binding FolderManager.LastScannedHeader}" Style="{StaticResource SortableFolderHeader}"
                                                           Command="{Binding FolderManager.SortByCommand}" CommandParameter="LastScanned"
                                                           ToolTip="Click to sort by last scan time"/>
                                 </GridViewColumn>
-                                <GridViewColumn Width="100" DisplayMemberBinding="{Binding ItemCountDisplay}">
+                                <GridViewColumn Width="90" DisplayMemberBinding="{Binding ItemCountDisplay}">
                                     <GridViewColumnHeader Content="{Binding FolderManager.ItemsHeader}" Style="{StaticResource SortableFolderHeader}"
                                                           Command="{Binding FolderManager.SortByCommand}" CommandParameter="Items"
                                                           ToolTip="Click to sort by number of files"/>
                                 </GridViewColumn>
-                                <GridViewColumn Header="" Width="80">
+                                <GridViewColumn Header="" Width="60">
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>
                                             <Button Style="{StaticResource IconChip}" ctl:Icon.Data="{StaticResource Icon.Close}" Foreground="{StaticResource Ink.Red}" Margin="0"
